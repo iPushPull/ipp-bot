@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES5",
+    "module": "commonjs",
+    "removeComments": true
+  },
+  "exclude": [
+    "node_modules",
+    "bower_components",
+    "embed",
+    "test",
+    "build"
+  ]
+}
