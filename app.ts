@@ -184,7 +184,7 @@ bot.dialog('/', [
 
 bot.dialog('/menu', [
     function (session) {
-        builder.Prompts.choice(session, "What would you like to do?", "pull");
+        builder.Prompts.choice(session, "What would you like to do?", "pull|push");
     },
     function (session, results) {
         if (results.response && results.response.entity != '(quit)') {
@@ -244,8 +244,15 @@ bot.dialog('/pull', [
                         // .text(table.toString())
                         .images([builder.CardImage.create(session, `${config.ipushpull.docs_url}/export/image?pageId=${res.data.id}&config=slack`)])
                 ]);
-
             session.send(msg);
+
+            msg = new builder.Message(session)
+                .textFormat(builder.TextFormat.markdown)
+                .text("`"+table.toString()+"`");
+            session.send(msg);
+            console.log(table.toString());
+
+
             session.endDialog();
         }, (err) => {
             session.send("Failed to load page");
