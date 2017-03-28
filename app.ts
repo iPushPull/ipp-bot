@@ -1,5 +1,5 @@
 import config = require("./config");
-import {ipushpull} from "./ipp_api";
+import { ipushpull } from "./ipp_api";
 import Q = require("q");
 import * as events from "events";
 import Table = require("cli-table2");
@@ -32,7 +32,7 @@ class IPushPull extends events.EventEmitter {
 
     private _api: IApiService;
 
-    constructor(username: string, password: string){
+    constructor(username: string, password: string) {
         super();
 
         this._username = username;
@@ -58,13 +58,13 @@ class IPushPull extends events.EventEmitter {
         });
     }
 
-    public getPage(pageName: string, folderName: string){
-        return this._api.getPageByName({domainId: folderName, pageId: pageName});
+    public getPage(pageName: string, folderName: string) {
+        return this._api.getPageByName({ domainId: folderName, pageId: pageName });
     }
 }
 let ipp = new IPushPull(config.ipushpull.username, config.ipushpull.password);
 
-ipp.auth().then((auth)=>{
+ipp.auth().then((auth) => {
     console.log(auth);
 }, (err) => {
     console.log(err);
@@ -78,13 +78,13 @@ ipp.auth().then((auth)=>{
 // Setup Restify Server
 var server = restify.createServer();
 server.listen(process.env.port || process.env.PORT || 3978, function () {
-   console.log('%s listening to %s', server.name, server.url); 
+    console.log('%s listening to %s', server.name, server.url);
 });
-  
+
 // Create chat bot
 var connector = new builder.ChatConnector({
-    appId: "b8ed13a3-ac18-43a8-a62a-070034fa2f7c", // process.env.MICROSOFT_APP_ID,
-    appPassword: "kJThruircakYOwdr9WvrUg5" // process.env.MICROSOFT_APP_PASSWORD
+    appId: config.bot.appId, // process.env.MICROSOFT_APP_ID,
+    appPassword: config.bot.appPassword // process.env.MICROSOFT_APP_PASSWORD
 });
 
 var bot = new builder.UniversalBot(connector);
@@ -95,15 +95,15 @@ server.post('/api/messages', connector.listen());
 //=========================================================
 
 bot.on('conversationUpdate', function (message) {
-   // Check for group conversations
+    // Check for group conversations
     if (message.address.conversation.isGroup) {
         // Send a hello message when bot is added
         if (message.membersAdded) {
             message.membersAdded.forEach(function (identity) {
                 if (identity.id === message.address.bot.id) {
                     var reply = new builder.Message()
-                            .address(message.address)
-                            .text("Hello everyone!");
+                        .address(message.address)
+                        .text("Hello everyone!");
                     bot.send(reply);
                 }
             });
@@ -127,8 +127,8 @@ bot.on('contactRelationUpdate', function (message) {
     if (message.action === 'add') {
         var name = message.user ? message.user.name : null;
         var reply = new builder.Message()
-                .address(message.address)
-                .text("Hello %s... Thanks for adding me. Say 'hello' to see some great demos.", name || 'there');
+            .address(message.address)
+            .text("Hello %s... Thanks for adding me. Say 'hello' to see some great demos.", name || 'there');
         bot.send(reply);
     } else {
         // delete their data
@@ -165,7 +165,7 @@ bot.dialog('/', [
             .title("ipushpull bot")
             // .text("Your bots - wherever your users are talking.")
             .images([
-                 builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/icon-32.png")
+                builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/icon-32.png")
             ]);
         var msg = new builder.Message(session).attachments([card]);
         session.send(msg);
@@ -222,15 +222,15 @@ bot.dialog('/pull', [
     },
     function (session, results) {
         let tableOptions: any = {
-            style: {border: []},
+            style: { border: [] },
         };
         pageId = results.response;
         session.send("Loading page ...");
-        ipp.getPage(pageId, domainId).then((res)=>{
+        ipp.getPage(pageId, domainId).then((res) => {
 
             let table: any = new Table(tableOptions);
 
-            for (let i: number = 0; i < res.data.content.length; i++){
+            for (let i: number = 0; i < res.data.content.length; i++) {
                 table.push(res.data.content[i].map((cell) => {
                     return cell.formatted_value || cell.value;
                 }));

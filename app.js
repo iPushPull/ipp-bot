@@ -53,8 +53,8 @@ server.listen(process.env.port || process.env.PORT || 3978, function () {
     console.log('%s listening to %s', server.name, server.url);
 });
 var connector = new builder.ChatConnector({
-    appId: "b8ed13a3-ac18-43a8-a62a-070034fa2f7c",
-    appPassword: "kJThruircakYOwdr9WvrUg5"
+    appId: config.bot.appId,
+    appPassword: config.bot.appPassword
 });
 var bot = new builder.UniversalBot(connector);
 server.post('/api/messages', connector.listen());
