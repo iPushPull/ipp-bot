@@ -212,6 +212,9 @@ var ipushpull;
                 .put(this._endPoint + "/domains/" + data.domainId + "/")
                 .data(data.data));
         };
+        Api.prototype.getDomainByName = function (domainName) {
+            return this.send(Request.get(this._endPoint + "/domains/name/" + domainName + "/"));
+        };
         Api.prototype.getDomainPages = function (domainId) {
             return this.send(Request.get(this._endPoint + "/domains/" + domainId + "/page_access/"));
         };

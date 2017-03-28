@@ -137,6 +137,7 @@ export namespace ipushpull {
         getDomains: () => IPromise<IRequestResult>;
         getDomain: (domainId: number) => IPromise<IRequestResult>;
         updateDomain: (data: any) => IPromise<IRequestResult>;
+        getDomainByName: (domainName: string) => IPromise<IRequestResult>;
         getDomainPages: (domainId: number) => IPromise<IRequestResult>;
         getDomainsAndPages: () => IPromise<IRequestResult>;
         getPage: (data: any) => IPromise<IRequestResult>;
@@ -269,6 +270,10 @@ export namespace ipushpull {
                     .put(this._endPoint + "/domains/" + data.domainId + "/")
                     .data(data.data)
             );
+        }
+
+        public getDomainByName(domainName: string): IPromise<IRequestResult>{
+            return this.send(Request.get(this._endPoint + "/domains/name/" + domainName + "/"));
         }
 
         public getDomainPages(domainId: number): IPromise<IRequestResult>{

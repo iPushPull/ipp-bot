@@ -40,6 +40,12 @@ var IPushPull = (function (_super) {
     IPushPull.prototype.getPage = function (pageName, folderName) {
         return this._api.getPageByName({ domainId: folderName, pageId: pageName });
     };
+    IPushPull.prototype.getDomain = function (folderName) {
+        return this._api.getDomainByName(folderName);
+    };
+    IPushPull.prototype.getDomainPages = function (folderId) {
+        return this._api.getDomainPages(folderId);
+    };
     return IPushPull;
 }(events.EventEmitter));
 var ipp = new IPushPull(config.ipushpull.username, config.ipushpull.password);
@@ -137,43 +143,79 @@ bot.dialog('/help', [
         session.endDialog("Global commands that are available anytime:\n\n* menu - Exits a demo and returns to the menu.\n* goodbye - End this conversation.\n* help - Displays these commands.");
     }
 ]);
-var domainId;
+var folderName;
+var folderId;
+var pageName;
 var pageId;
-bot.dialog('/pull', [
+var domainPages = [];
+bot.dialog('/push', [
     function (session) {
-        session.send("Pull a public page");
-        builder.Prompts.text(session, "What is your domain name?");
+        builder.Prompts.text(session, "Yes or no?");
     },
     function (session, results) {
-        domainId = results.response;
-        builder.Prompts.text(session, "What is your page name?");
+        session.send("I see that you have entered '%s'. Hmmm.", results.response);
+        session.endDialog();
+    }
+]);
+bot.dialog('/pull', [
+    function (session) {
+        console.log("session data", session.userData);
+        builder.Prompts.text(session, "What is your folder name?");
+    },
+    function (session, results) {
+        folderName = results.response;
+        ipp.getDomain(folderName).then(function (res) {
+            folderId = res.data.id;
+            ipp.getDomainPages(folderId).then(function (res) {
+                domainPages = [];
+                for (var i = 0; i < res.data.pages.length; i++) {
+                    if (res.data.pages[i].special_page_type != 0 || !res.data.pages[i].is_public) {
+                        continue;
+                    }
+                    domainPages.push(res.data.pages[i].name);
+                }
+                builder.Prompts.choice(session, "What is your page name?", domainPages.join("|"));
+            }, function (err) {
+                console.log(err);
+                session.send("Failed to load pages");
+                session.endDialog();
+            });
+        }, function (err) {
+            console.log(err);
+            session.send("Failed to load folder");
+            session.endDialog();
+        });
     },
     function (session, results) {
         var tableOptions = {
             style: { border: [] },
         };
-        pageId = results.response;
+        pageName = results.response.entity;
+        if (domainPages.indexOf(pageName) == -1) {
+            session.send("Page does not exist");
+            session.endDialog();
+            return;
+        }
         session.send("Loading page ...");
-        ipp.getPage(pageId, domainId).then(function (res) {
+        ipp.getPage(pageName, folderName).then(function (res) {
+            var imageUrl = config.ipushpull.docs_url + "/export/image?pageId=" + res.data.id + "&config=slack";
             var table = new Table(tableOptions);
             for (var i = 0; i < res.data.content.length; i++) {
                 table.push(res.data.content[i].map(function (cell) {
                     return cell.formatted_value || cell.value;
                 }));
             }
-            var msg = new builder.Message(session)
-                .textFormat(builder.TextFormat.xml)
-                .attachments([
-                new builder.HeroCard(session)
-                    .title("" + res.data.name)
-                    .images([builder.CardImage.create(session, config.ipushpull.docs_url + "/export/image?pageId=" + res.data.id + "&config=slack")])
-            ]);
-            session.send(msg);
+            var msg;
             msg = new builder.Message(session)
-                .textFormat(builder.TextFormat.markdown)
                 .text("`" + table.toString() + "`");
             session.send(msg);
             console.log(table.toString());
+            msg = new builder.Message(session)
+                .attachments([{
+                    contentType: "image/jpeg",
+                    contentUrl: imageUrl
+                }]);
+            session.send(msg);
             session.endDialog();
         }, function (err) {
             session.send("Failed to load page");

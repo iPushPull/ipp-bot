@@ -61,9 +61,20 @@ class IPushPull extends events.EventEmitter {
     public getPage(pageName: string, folderName: string) {
         return this._api.getPageByName({ domainId: folderName, pageId: pageName });
     }
+
+    public getDomain(folderName: string) {
+        return this._api.getDomainByName(folderName);
+    }
+
+    public getDomainPages(folderId: number) {
+        return this._api.getDomainPages(folderId);
+    }
+
 }
+
 let ipp = new IPushPull(config.ipushpull.username, config.ipushpull.password);
 
+// err, login
 ipp.auth().then((auth) => {
     console.log(auth);
 }, (err) => {
@@ -207,26 +218,81 @@ bot.dialog('/help', [
     }
 ]);
 
-let domainId: string;
+let folderName: string;
+let folderId: number;
+let pageName: string;
 let pageId: string;
+let domainPages: any = [];
+
+bot.dialog('/push', [
+    function (session) {
+        builder.Prompts.text(session, "Yes or no?");
+    },
+    function (session, results) {
+        session.send("I see that you have entered '%s'. Hmmm.", results.response);
+        session.endDialog();
+    }
+]);
 
 bot.dialog('/pull', [
     function (session) {
-        session.send("Pull a public page");
-        builder.Prompts.text(session, "What is your domain name?");
+        console.log("session data", session.userData);
+        // session.send("Pull a public page");
+        builder.Prompts.text(session, "What is your folder name?");
     },
     function (session, results) {
-        domainId = results.response;
+
+        folderName = results.response;
+
+        // get domain details
+        ipp.getDomain(folderName).then((res) => {
+
+            folderId = res.data.id;
+
+            // now get domain pages
+            ipp.getDomainPages(folderId).then((res) => {
+
+                // create prompt for pages
+                domainPages = [];
+                for (let i: number = 0; i < res.data.pages.length; i++) {
+                    if (res.data.pages[i].special_page_type != 0 || !res.data.pages[i].is_public) {
+                        continue;
+                    }
+                    domainPages.push(res.data.pages[i].name);
+                }
+                builder.Prompts.choice(session, "What is your page name?", domainPages.join("|"));
+
+            }, (err) => {
+                console.log(err);
+                session.send("Failed to load pages");
+                session.endDialog();
+            })
+        }, (err) => {
+            console.log(err);
+            session.send("Failed to load folder");
+            session.endDialog();
+        })
         // session.send("You entered '%s'", results.response);
-        builder.Prompts.text(session, "What is your page name?");
+
     },
     function (session, results) {
+
         let tableOptions: any = {
             style: { border: [] },
         };
-        pageId = results.response;
+        pageName = results.response.entity;
+
+        if (domainPages.indexOf(pageName) == -1) {
+            session.send("Page does not exist");
+            session.endDialog();
+            return;
+        }
+
         session.send("Loading page ...");
-        ipp.getPage(pageId, domainId).then((res) => {
+
+        ipp.getPage(pageName, folderName).then((res) => {
+
+            let imageUrl: string = `${config.ipushpull.docs_url}/export/image?pageId=${res.data.id}&config=slack`;
 
             let table: any = new Table(tableOptions);
 
@@ -236,22 +302,30 @@ bot.dialog('/pull', [
                 }));
             }
 
-            let msg = new builder.Message(session)
-                .textFormat(builder.TextFormat.xml)
-                .attachments([
-                    new builder.HeroCard(session)
-                        .title(`${res.data.name}`)
-                        // .text(table.toString())
-                        .images([builder.CardImage.create(session, `${config.ipushpull.docs_url}/export/image?pageId=${res.data.id}&config=slack`)])
-                ]);
-            session.send(msg);
+            let msg: any;
+
+            // let msg = new builder.Message(session)
+            //     .textFormat(builder.TextFormat.xml)
+            //     .attachments([
+            //         new builder.HeroCard(session)
+            //             .title(`${res.data.name}`)
+            //             // .text(table.toString())
+            //             .images([builder.CardImage.create(session, imageUrl)])
+            //     ]);
+            // session.send(msg);
 
             msg = new builder.Message(session)
-                .textFormat(builder.TextFormat.markdown)
-                .text("`"+table.toString()+"`");
+                // .textFormat(builder.TextFormat.plain)
+                .text("`" + table.toString() + "`");
             session.send(msg);
             console.log(table.toString());
 
+            msg = new builder.Message(session)
+                .attachments([{
+                    contentType: "image/jpeg",
+                    contentUrl: imageUrl
+                }]);
+            session.send(msg);
 
             session.endDialog();
         }, (err) => {
