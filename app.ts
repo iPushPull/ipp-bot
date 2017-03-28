@@ -171,6 +171,7 @@ bot.beginDialogAction('help', '/help', { matches: /^help/i });
 
 bot.dialog('/', [
     function (session) {
+
         // Send a greeting and show help.
         var card = new builder.HeroCard(session)
             .title("ipushpull bot")
@@ -195,7 +196,7 @@ bot.dialog('/', [
 
 bot.dialog('/menu', [
     function (session) {
-        builder.Prompts.choice(session, "What would you like to do?", "pull|push");
+        builder.Prompts.choice(session, "What would you like to do?", "pull|alert");
     },
     function (session, results) {
         if (results.response && results.response.entity != '(quit)') {
@@ -224,7 +225,7 @@ let pageName: string;
 let pageId: string;
 let domainPages: any = [];
 
-bot.dialog('/push', [
+bot.dialog('/alert', [
     function (session) {
         builder.Prompts.text(session, "Yes or no?");
     },
@@ -236,7 +237,7 @@ bot.dialog('/push', [
 
 bot.dialog('/pull', [
     function (session) {
-        console.log("session data", session.userData);
+        console.log("session data", session);
         // session.send("Pull a public page");
         builder.Prompts.text(session, "What is your folder name?");
     },
@@ -314,18 +315,25 @@ bot.dialog('/pull', [
             //     ]);
             // session.send(msg);
 
-            msg = new builder.Message(session)
-                // .textFormat(builder.TextFormat.plain)
-                .text("`" + table.toString() + "`");
-            session.send(msg);
-            console.log(table.toString());
-
-            msg = new builder.Message(session)
-                .attachments([{
-                    contentType: "image/jpeg",
-                    contentUrl: imageUrl
-                }]);
-            session.send(msg);
+            switch (session.message.address.channelId) {
+                case "slack":
+                case "emulator":
+                    // show table as string
+                    msg = new builder.Message(session)
+                        .text("`" + table.toString() + "`");
+                    session.send(msg);
+                    console.log(table.toString());
+                    break;
+                default:
+                    // show table as image
+                    msg = new builder.Message(session)
+                        .attachments([{
+                            contentType: "image/jpeg",
+                            contentUrl: imageUrl
+                        }]);
+                    session.send(msg);
+                    break;
+            }
 
             session.endDialog();
         }, (err) => {

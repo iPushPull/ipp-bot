@@ -124,7 +124,7 @@ bot.dialog('/', [
 ]);
 bot.dialog('/menu', [
     function (session) {
-        builder.Prompts.choice(session, "What would you like to do?", "pull|push");
+        builder.Prompts.choice(session, "What would you like to do?", "pull|alert");
     },
     function (session, results) {
         if (results.response && results.response.entity != '(quit)') {
@@ -148,7 +148,7 @@ var folderId;
 var pageName;
 var pageId;
 var domainPages = [];
-bot.dialog('/push', [
+bot.dialog('/alert', [
     function (session) {
         builder.Prompts.text(session, "Yes or no?");
     },
@@ -159,7 +159,7 @@ bot.dialog('/push', [
 ]);
 bot.dialog('/pull', [
     function (session) {
-        console.log("session data", session.userData);
+        console.log("session data", session);
         builder.Prompts.text(session, "What is your folder name?");
     },
     function (session, results) {
@@ -206,16 +206,23 @@ bot.dialog('/pull', [
                 }));
             }
             var msg;
-            msg = new builder.Message(session)
-                .text("`" + table.toString() + "`");
-            session.send(msg);
-            console.log(table.toString());
-            msg = new builder.Message(session)
-                .attachments([{
-                    contentType: "image/jpeg",
-                    contentUrl: imageUrl
-                }]);
-            session.send(msg);
+            switch (session.message.address.channelId) {
+                case "slack":
+                case "emulator":
+                    msg = new builder.Message(session)
+                        .text("`" + table.toString() + "`");
+                    session.send(msg);
+                    console.log(table.toString());
+                    break;
+                default:
+                    msg = new builder.Message(session)
+                        .attachments([{
+                            contentType: "image/jpeg",
+                            contentUrl: imageUrl
+                        }]);
+                    session.send(msg);
+                    break;
+            }
             session.endDialog();
         }, function (err) {
             session.send("Failed to load page");
