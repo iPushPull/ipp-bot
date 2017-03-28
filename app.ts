@@ -165,6 +165,16 @@ bot.use(builder.Middleware.dialogVersion({ version: 1.0, resetCommand: /^reset/i
 bot.endConversationAction('goodbye', 'Goodbye :)', { matches: /^goodbye/i });
 bot.beginDialogAction('help', '/help', { matches: /^help/i });
 
+// receive external trigger
+bot.on('trigger', function (message) {
+    // handle message from trigger function
+    var queuedMessage = message.value;
+    var reply = new builder.Message()
+        .address(queuedMessage.address)
+        .text('This is coming from the trigger: ' + queuedMessage.text);
+    bot.send(reply);
+});
+
 //=========================================================
 // Bots Dialogs
 //=========================================================
@@ -182,40 +192,15 @@ bot.dialog('/', [
         var msg = new builder.Message(session).attachments([card]);
         session.send(msg);
         // session.send("Hi... I'm the Microsoft Bot Framework demo bot for Skype. I can show you everything you can use our Bot Builder SDK to do on Skype.");
-        session.beginDialog('/menu');
+        session.beginDialog('/pull');
     },
     function (session, results) {
         // Display menu
-        session.beginDialog('/menu');
+        session.beginDialog('/pull');
     },
     function (session, results) {
         // Always say goodbye
-        session.send("Ok... See you later!");
-    }
-]);
-
-bot.dialog('/menu', [
-    function (session) {
-        builder.Prompts.choice(session, "What would you like to do?", "pull|alert");
-    },
-    function (session, results) {
-        if (results.response && results.response.entity != '(quit)') {
-            // Launch demo dialog
-            session.beginDialog('/' + results.response.entity);
-        } else {
-            // Exit the menu
-            session.endDialog();
-        }
-    },
-    function (session, results) {
-        // The menu runs a loop until the user chooses to (quit).
-        session.replaceDialog('/menu');
-    }
-]).reloadAction('reloadMenu', null, { matches: /^menu|show menu/i });
-
-bot.dialog('/help', [
-    function (session) {
-        session.endDialog("Global commands that are available anytime:\n\n* menu - Exits a demo and returns to the menu.\n* goodbye - End this conversation.\n* help - Displays these commands.");
+        session.beginDialog('/pull');
     }
 ]);
 
@@ -224,16 +209,6 @@ let folderId: number;
 let pageName: string;
 let pageId: string;
 let domainPages: any = [];
-
-bot.dialog('/alert', [
-    function (session) {
-        builder.Prompts.text(session, "Yes or no?");
-    },
-    function (session, results) {
-        session.send("I see that you have entered '%s'. Hmmm.", results.response);
-        session.endDialog();
-    }
-]);
 
 bot.dialog('/pull', [
     function (session) {
@@ -244,6 +219,8 @@ bot.dialog('/pull', [
     function (session, results) {
 
         folderName = results.response;
+
+        session.sendTyping();
 
         // get domain details
         ipp.getDomain(folderName).then((res) => {
@@ -261,7 +238,7 @@ bot.dialog('/pull', [
                     }
                     domainPages.push(res.data.pages[i].name);
                 }
-                builder.Prompts.choice(session, "What is your page name?", domainPages.join("|"));
+                builder.Prompts.choice(session, "Please select a page?", domainPages.join("|"));
 
             }, (err) => {
                 console.log(err);
@@ -278,9 +255,6 @@ bot.dialog('/pull', [
     },
     function (session, results) {
 
-        let tableOptions: any = {
-            style: { border: [] },
-        };
         pageName = results.response.entity;
 
         if (domainPages.indexOf(pageName) == -1) {
@@ -289,58 +263,88 @@ bot.dialog('/pull', [
             return;
         }
 
-        session.send("Loading page ...");
+        let msg: any = new builder.Message(session)
+            .textFormat(builder.TextFormat.xml)
+            // .attachmentLayout(builder.AttachmentLayout.carousel)
+            .attachments([
+                new builder.HeroCard(session)
+                    .title("What would you like to do?")
+                    .buttons([
+                        builder.CardAction.imBack(session, "pull", "Pull page data"),
+                        builder.CardAction.imBack(session, "alert", "Create Alert")
+                    ])
+            ]);
+
+        // session.send(msg);
+
+        builder.Prompts.choice(session, msg, "pull|alert");
+
+    },
+    function (session, results) {
+
+        let func: string = results.response.entity;
+
+        session.sendTyping();
 
         ipp.getPage(pageName, folderName).then((res) => {
 
-            let imageUrl: string = `${config.ipushpull.docs_url}/export/image?pageId=${res.data.id}&config=slack`;
+            if (func === "pull") {
 
-            let table: any = new Table(tableOptions);
+                let imageUrl: string = `${config.ipushpull.docs_url}/export/image?pageId=${res.data.id}&config=slack`;
 
-            for (let i: number = 0; i < res.data.content.length; i++) {
-                table.push(res.data.content[i].map((cell) => {
-                    return cell.formatted_value || cell.value;
-                }));
+                let tableOptions: any = {
+                    style: { border: [] },
+                };
+                let table: any = new Table(tableOptions);
+
+                for (let i: number = 0; i < res.data.content.length; i++) {
+                    table.push(res.data.content[i].map((cell) => {
+                        return cell.formatted_value || cell.value;
+                    }));
+                }
+
+                let msg: any;
+
+                switch (session.message.address.channelId) {
+                    case "slack":
+                    case "emulator":
+                        // show table as string
+                        msg = new builder.Message(session)
+                            .text("`" + table.toString() + "`");
+                        session.send(msg);
+                        console.log(table.toString());
+                        break;
+                    default:
+                        // show table as image
+                        msg = new builder.Message(session)
+                            .attachments([{
+                                contentType: "image/jpeg",
+                                contentUrl: imageUrl
+                            }]);
+                        session.send(msg);
+                        break;
+                }
+
+                session.endDialog();
+
             }
 
-            let msg: any;
+            if (func === "alert") {
 
-            // let msg = new builder.Message(session)
-            //     .textFormat(builder.TextFormat.xml)
-            //     .attachments([
-            //         new builder.HeroCard(session)
-            //             .title(`${res.data.name}`)
-            //             // .text(table.toString())
-            //             .images([builder.CardImage.create(session, imageUrl)])
-            //     ]);
-            // session.send(msg);
+                builder.Prompts.text(session, "Set alert rule. Eg: tag_name >54.6, tag_name <30.2");
 
-            switch (session.message.address.channelId) {
-                case "slack":
-                case "emulator":
-                    // show table as string
-                    msg = new builder.Message(session)
-                        .text("`" + table.toString() + "`");
-                    session.send(msg);
-                    console.log(table.toString());
-                    break;
-                default:
-                    // show table as image
-                    msg = new builder.Message(session)
-                        .attachments([{
-                            contentType: "image/jpeg",
-                            contentUrl: imageUrl
-                        }]);
-                    session.send(msg);
-                    break;
             }
 
-            session.endDialog();
+
         }, (err) => {
             session.send("Failed to load page");
             session.endDialog();
         });
         // session.send("You entered '%s'", results.response);
+    },
+    function (session, results) {
+        session.send("You entered '%s'. Your alert watcher has been started", results.response);
+        session.endDialog();
     }
 ]);
 
