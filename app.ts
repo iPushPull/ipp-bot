@@ -134,10 +134,10 @@ bot.dialog('/', [
 
         // Send a greeting and show help.
         var card = new builder.HeroCard(session)
-            .title("ipushpull bot")
+            .title("ipushpull page bot")
             // .text("Your bots - wherever your users are talking.")
             .images([
-                builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/icon-32.png")
+                builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/twitter-card.png")
             ]);
         var msg = new builder.Message(session).attachments([card]);
         session.send(msg);
@@ -150,7 +150,14 @@ bot.dialog('/', [
     },
     function (session, results) {
         // Always say goodbye
-        session.beginDialog('/pull');
+        // session.beginDialog('/pull');
+        session.beginDialog('/');
+    }
+]);
+
+bot.dialog('/help', [
+    function (session) {
+        session.endDialog("Global commands that are available anytime:\n\n* menu - Exits a demo and returns to the menu.\n* goodbye - End this conversation.\n* help - Displays these commands.");
     }
 ]);
 
@@ -162,10 +169,12 @@ let domainPages: any = [];
 let pageTags: any = {};
 
 bot.dialog('/pull', [
+    // ask for folder
     function (session) {
         // session.send("Pull a public page");
         builder.Prompts.text(session, "What is your folder name?");
     },
+    // show folder pages
     function (session, results) {
 
         folderName = results.response;
@@ -203,6 +212,7 @@ bot.dialog('/pull', [
         // session.send("You entered '%s'", results.response);
 
     },
+    // page actions
     function (session, results) {
 
         pageName = results.response.entity;
@@ -213,24 +223,50 @@ bot.dialog('/pull', [
             return;
         }
 
-        let msg: any = new builder.Message(session)
-            .textFormat(builder.TextFormat.xml)
-            // .attachmentLayout(builder.AttachmentLayout.carousel)
-            .attachments([
-                new builder.HeroCard(session)
-                    .title("What would you like to do?")
-                    .buttons([
-                        builder.CardAction.imBack(session, "pull", "Pull page data"),
-                        builder.CardAction.imBack(session, "pull_tag", "Pull page tag"),
-                        builder.CardAction.imBack(session, "alert", "Create alarm")
-                    ])
-            ]);
+        ipp.getPage(pageName, folderName).then((res) => {
 
-        // session.send(msg);
+            let buttons: any = [
+                builder.CardAction.imBack(session, "pull", "Pull page data"),
+                builder.CardAction.imBack(session, "pull_tag", "Pull page tag"),
+                builder.CardAction.imBack(session, "alert", "Create alert"),
+            ];
 
-        builder.Prompts.choice(session, msg, "pull|pull_tag|alert");
+            let choices: any = ["pull","pull_tag","alert"];
+
+            if (session.message.address.channelId === "facebook") {
+                buttons.push({
+                    "type": "web_url",
+                    "url": "https://test.ipushpull.com/pages/embed/domains/IEX/pages/IEX_Summary",
+                    "title": "iPushPull Page",
+                    "webview_height_ratio": "full" // compact
+                });
+                choices.push("url")
+            }
+
+            let msg: any = new builder.Message(session)
+                .textFormat(builder.TextFormat.xml)
+                // .attachmentLayout(builder.AttachmentLayout.carousel)
+                .attachments([
+                    new builder.HeroCard(session)
+                        .title(res.data.name)
+                        .subtitle("What would you like to do?")
+                        .images([
+                            builder.CardImage.create(session, getImageUrl(res.data)),
+                            builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/icon-32.png")
+                        ])
+                        .buttons(buttons)
+                ]);
+
+            builder.Prompts.choice(session, msg, choices.join("|"));
+
+        }, (err) => {
+            session.send("Failed to load page", err);
+            session.endDialog();
+        });
+
 
     },
+    // act on page actions
     function (session, results) {
 
         let func: string = results.response.entity;
@@ -244,7 +280,7 @@ bot.dialog('/pull', [
 
             if (func === "pull") {
 
-                let imageUrl: string = `${config.ipushpull.docs_url}/export/image?pageId=${res.data.id}&config=slack`;
+                // let imageUrl: string = `${config.ipushpull.docs_url}/export/image?pageId=${res.data.id}&config=slack`;
 
                 let tableOptions: any = {
                     style: { border: [] },
@@ -273,7 +309,7 @@ bot.dialog('/pull', [
                         msg = new builder.Message(session)
                             .attachments([{
                                 contentType: "image/jpeg",
-                                contentUrl: imageUrl
+                                contentUrl: getImageUrl(res.data),
                             }]);
                         session.send(msg);
                         break;
@@ -286,7 +322,9 @@ bot.dialog('/pull', [
 
             if (func === "pull_tag") {
                 session.userData.func = "pull_tag";
-                builder.Prompts.text(session, "Please enter the tag name");
+
+                builder.Prompts.choice(session, "Please enter the tag name", Object.keys(pageTags).join("|"));
+                // builder.Prompts.text(session, "Please enter the tag name");
             }
 
             if (func === "alert") {
@@ -301,9 +339,10 @@ bot.dialog('/pull', [
         });
         // session.send("You entered '%s'", results.response);
     },
+    // page action
     function (session, results) {
         if (session.userData.func === "pull_tag") {
-            let tag: string = results.response;
+            let tag: string = results.response.entity;
             if (pageTags.hasOwnProperty(tag)) {
                 console.log(pageTags[tag]);
                 session.send(pageTags[tag].value);
@@ -339,5 +378,9 @@ function findAndSetTags(page: any) {
         }
     }
     console.log("pageTags", pageTags);
+}
+
+function getImageUrl(page: any) {
+    return `${config.ipushpull.docs_url}/export/image?pageId=${page.id}&config=slack`;
 }
 
