@@ -226,19 +226,20 @@ bot.dialog('/pull', [
         ipp.getPage(pageName, folderName).then((res) => {
 
             let buttons: any = [
-                builder.CardAction.imBack(session, "pull", "Pull page data"),
+                builder.CardAction.imBack(session, "pull", "Pull data"),
+                builder.CardAction.imBack(session, "pull_image", "Pull image"),
                 builder.CardAction.imBack(session, "pull_tag", "Pull page tag"),
                 builder.CardAction.imBack(session, "alert", "Create alert"),
             ];
 
-            let choices: any = ["pull","pull_tag","alert"];
+            let choices: any = ["pull", "pull_image", "pull_tag", "alert"];
 
             if (session.message.address.channelId === "facebook") {
                 buttons.push({
                     "type": "web_url",
                     "url": "https://test.ipushpull.com/pages/embed/domains/IEX/pages/IEX_Summary",
                     "title": "iPushPull Page",
-                    "webview_height_ratio": "full" // compact
+                    "webview_height_ratio": "compact" // full, compact
                 });
                 choices.push("url")
             }
@@ -278,9 +279,10 @@ bot.dialog('/pull', [
             // get them tags
             findAndSetTags(res.data);
 
-            if (func === "pull") {
+            let msg: any;
 
-                // let imageUrl: string = `${config.ipushpull.docs_url}/export/image?pageId=${res.data.id}&config=slack`;
+            // show table as string
+            if (func === "pull") {
 
                 let tableOptions: any = {
                     style: { border: [] },
@@ -293,31 +295,24 @@ bot.dialog('/pull', [
                     }));
                 }
 
-                let msg: any;
+                console.log(table.toString());
 
-                switch (session.message.address.channelId) {
-                    case "slack":
-                    case "emulator":
-                        // show table as string
-                        msg = new builder.Message(session)
-                            .text("`" + table.toString() + "`");
-                        session.send(msg);
-                        console.log(table.toString());
-                        break;
-                    default:
-                        // show table as image
-                        msg = new builder.Message(session)
-                            .attachments([{
-                                contentType: "image/jpeg",
-                                contentUrl: getImageUrl(res.data),
-                            }]);
-                        session.send(msg);
-                        break;
-                }
-
+                msg = new builder.Message(session)
+                    .text("`" + table.toString() + "`"); // .replace(/(?:\r\n|\r|\n)/g, '  ')
+                session.send(msg);
                 session.endDialog();
-                // session.replaceDialog('/pull');
+            }
 
+            // show table as image
+            if (func === "pull_image") {
+                msg = new builder.Message(session)
+                    .attachments([{
+                        contentType: "image/jpeg",
+                        contentUrl: getImageUrl(res.data),
+                    }]);
+
+                session.send(msg);
+                session.endDialog();
             }
 
             if (func === "pull_tag") {
