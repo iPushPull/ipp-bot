@@ -1,7 +1,6 @@
 import config = require("./config");
-import { ipushpull } from "./ipp_api";
 import Q = require("q");
-import * as events from "events";
+import { IPushPull } from "./ipp_service";
 import Table = require("cli-table2");
 
 /*-----------------------------------------------------------------------------
@@ -22,56 +21,7 @@ like 'help'.
 var builder = require('./core/');
 var restify = require('restify');
 
-// @todo NOT HERE!
-let accessToken: string;
-let refreshToken: string;
-
-class IPushPull extends events.EventEmitter {
-    private _username: string;
-    private _password: string;
-
-    private _api: IApiService;
-
-    constructor(username: string, password: string) {
-        super();
-
-        this._username = username;
-        this._password = password;
-
-        this._api = new ipushpull.Api(config.ipushpull.endpoint);
-
-    }
-
-    public auth() {
-        return this._api.userLogin({
-            email: this._username,
-            password: this._password,
-        }).then((data) => {
-            accessToken = data.data.access_token;
-            refreshToken = data.data.refresh_token;
-            this._api.accessToken = data.data.access_token;
-            console.log("Login", data);
-            return true;
-        }, (err) => {
-            console.log("Could not login!", err);
-            return false;
-        });
-    }
-
-    public getPage(pageName: string, folderName: string) {
-        return this._api.getPageByName({ domainId: folderName, pageId: pageName });
-    }
-
-    public getDomain(folderName: string) {
-        return this._api.getDomainByName(folderName);
-    }
-
-    public getDomainPages(folderId: number) {
-        return this._api.getDomainPages(folderId);
-    }
-
-}
-
+// create ipp service
 let ipp = new IPushPull(config.ipushpull.username, config.ipushpull.password);
 
 // err, login
@@ -80,7 +30,6 @@ ipp.auth().then((auth) => {
 }, (err) => {
     console.log(err);
 });
-
 
 //=========================================================
 // Bot Setup
@@ -151,6 +100,7 @@ bot.on('deleteUserData', function (message) {
 });
 
 
+
 //=========================================================
 // Bots Middleware
 //=========================================================
@@ -212,7 +162,6 @@ let domainPages: any = [];
 
 bot.dialog('/pull', [
     function (session) {
-        console.log("session data", session);
         // session.send("Pull a public page");
         builder.Prompts.text(session, "What is your folder name?");
     },
@@ -271,7 +220,7 @@ bot.dialog('/pull', [
                     .title("What would you like to do?")
                     .buttons([
                         builder.CardAction.imBack(session, "pull", "Pull page data"),
-                        builder.CardAction.imBack(session, "alert", "Create Alert")
+                        builder.CardAction.imBack(session, "alert", "Create alarm")
                     ])
             ]);
 
@@ -307,6 +256,7 @@ bot.dialog('/pull', [
 
                 switch (session.message.address.channelId) {
                     case "slack":
+                    case "skype":
                     case "emulator":
                         // show table as string
                         msg = new builder.Message(session)
