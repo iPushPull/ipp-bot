@@ -159,6 +159,7 @@ let folderId: number;
 let pageName: string;
 let pageId: string;
 let domainPages: any = [];
+let pageTags: any = {};
 
 bot.dialog('/pull', [
     function (session) {
@@ -220,13 +221,14 @@ bot.dialog('/pull', [
                     .title("What would you like to do?")
                     .buttons([
                         builder.CardAction.imBack(session, "pull", "Pull page data"),
+                        builder.CardAction.imBack(session, "pull_tag", "Pull page tag"),
                         builder.CardAction.imBack(session, "alert", "Create alarm")
                     ])
             ]);
 
         // session.send(msg);
 
-        builder.Prompts.choice(session, msg, "pull|alert");
+        builder.Prompts.choice(session, msg, "pull|pull_tag|alert");
 
     },
     function (session, results) {
@@ -236,6 +238,9 @@ bot.dialog('/pull', [
         session.sendTyping();
 
         ipp.getPage(pageName, folderName).then((res) => {
+
+            // get them tags
+            findAndSetTags(res.data);
 
             if (func === "pull") {
 
@@ -256,7 +261,6 @@ bot.dialog('/pull', [
 
                 switch (session.message.address.channelId) {
                     case "slack":
-                    case "skype":
                     case "emulator":
                         // show table as string
                         msg = new builder.Message(session)
@@ -276,25 +280,64 @@ bot.dialog('/pull', [
                 }
 
                 session.endDialog();
+                // session.replaceDialog('/pull');
 
             }
 
+            if (func === "pull_tag") {
+                session.userData.func = "pull_tag";
+                builder.Prompts.text(session, "Please enter the tag name");
+            }
+
             if (func === "alert") {
-
+                session.userData.func = "alert";
                 builder.Prompts.text(session, "Set alert rule. Eg: tag_name >54.6, tag_name <30.2");
-
             }
 
 
         }, (err) => {
-            session.send("Failed to load page");
+            session.send("Failed to load page", err);
             session.endDialog();
         });
         // session.send("You entered '%s'", results.response);
     },
     function (session, results) {
-        session.send("You entered '%s'. Your alert watcher has been started", results.response);
+        if (session.userData.func === "pull_tag") {
+            let tag: string = results.response;
+            if (pageTags.hasOwnProperty(tag)) {
+                console.log(pageTags[tag]);
+                session.send(pageTags[tag].value);
+            } else {
+                session.send("This tag does not exists");
+            }
+            session.endDialog();
+
+        } else {
+            session.send("You entered '%s'. Your alert watcher has been started", results.response);
+        }
         session.endDialog();
     }
 ]);
+
+function findAndSetTags(page: any) {
+    pageTags = {};
+    for (let i: number = 0; i < page.content.length; i++) {
+        for (let k: number = 0; k < page.content[i].length; k++) {
+            if (!page.content[i][k].tag) {
+                continue;
+            }
+            let tags: any = page.content[i][k].tag;
+            for (let t: number = 0; t < tags.length; t++) {
+                pageTags[tags[t]] = {
+                    tag: tags[t],
+                    tags: page.content[i][k].tag,
+                    value: page.content[i][k].formatted_value || page.content[i][k].value,
+                    row: i,
+                    col: k
+                };
+            }
+        }
+    }
+    console.log("pageTags", pageTags);
+}
 

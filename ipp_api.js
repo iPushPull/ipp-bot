@@ -213,6 +213,7 @@ var ipushpull;
                 .data(data.data));
         };
         Api.prototype.getDomainByName = function (domainName) {
+            console.log("getDomainByName", this._endPoint + "/domains/name/" + domainName + "/");
             return this.send(Request.get(this._endPoint + "/domains/name/" + domainName + "/"));
         };
         Api.prototype.getDomainPages = function (domainId) {
@@ -400,6 +401,7 @@ var ipushpull;
             return this.send(Request.del(this._endPoint + "/domains/" + data.domainId + "/docsnames/" + data.docRuleId + "/"));
         };
         Api.prototype.send = function (request) {
+            console.log("send", this.accessToken, request);
             request.headers({
                 "Authorization": "Bearer " + ((this.accessToken) ? this.accessToken : "null"),
             });
