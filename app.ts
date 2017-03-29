@@ -256,9 +256,9 @@ bot.dialog('/pull', [
             // setup buttons
             let buttons: any = [];
             if (["emulator", "slack"].indexOf(session.message.address.channelId) != -1) {
-                buttons.push(builder.CardAction.imBack(session, "pull", "Pull data"));
+                buttons.push(builder.CardAction.imBack(session, "pull", "Pull page data"));
             } else {
-                buttons.push(builder.CardAction.imBack(session, "pull_image", "Pull image"));
+                buttons.push(builder.CardAction.imBack(session, "pull_image", "Image snapshot"));
             }
             buttons.push(builder.CardAction.imBack(session, "pull_tag", "Pull page tag"));
             buttons.push(builder.CardAction.imBack(session, "alert", "Create alert"));
@@ -273,7 +273,7 @@ bot.dialog('/pull', [
                     .subtitle("What would you like to do?")
                     .images([
                         builder.CardImage.create(session, getImageUrl(res.data)),
-                        builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/icon-32.png")
+                        // builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/icon-32.png")
                     ])
                     .buttons(buttons)
             ];
@@ -370,8 +370,6 @@ bot.dialog('/pull', [
             } else {
                 session.send("This tag does not exists");
             }
-            session.endDialog();
-
         } else {
             session.send("You entered '%s'. Your alert watcher has been started", results.response);
         }
