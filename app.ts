@@ -2,6 +2,7 @@ import config = require("./config");
 import Q = require("q");
 import { IPushPull } from "./ipp_service";
 import Table = require("cli-table2");
+const util = require('util');
 
 /*-----------------------------------------------------------------------------
 This Bot demonstrates how to create a simple First Run experience for a bot.
@@ -225,40 +226,65 @@ bot.dialog('/pull', [
 
         ipp.getPage(pageName, folderName).then((res) => {
 
-            let buttons: any = [
-                builder.CardAction.imBack(session, "pull", "Pull data"),
-                builder.CardAction.imBack(session, "pull_image", "Pull image"),
-                builder.CardAction.imBack(session, "pull_tag", "Pull page tag"),
-                builder.CardAction.imBack(session, "alert", "Create alert"),
-            ];
-
-            let choices: any = ["pull", "pull_image", "pull_tag", "alert"];
-
+            // show in overlay. facebook only
             if (session.message.address.channelId === "facebook") {
-                buttons.push({
-                    "type": "web_url",
-                    "url": "https://test.ipushpull.com/pages/embed/domains/IEX/pages/IEX_Summary",
-                    "title": "iPushPull Page",
-                    "webview_height_ratio": "compact" // full, compact
-                });
-                choices.push("url")
+
+                let msgFb: any = new builder.Message(session)
+                    .sourceEvent({
+                        facebook: {
+                            attachment: {
+                                type: "template",
+                                payload: {
+                                    template_type: "button",
+                                    text: "Open live view",
+                                    buttons: [
+                                        {
+                                            type: "web_url",
+                                            url: `${config.ipushpull.web_url}/pages/embed/domains/${folderName}/pages/${pageName}`,
+                                            title: `${res.data.name}`,
+                                            // webview_height_ratio: "compact"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    });
+
+                session.send(msgFb);
             }
 
+            // setup buttons
+            let buttons: any = [];
+            if (["emulator", "slack"].indexOf(session.message.address.channelId) != -1) {
+                buttons.push(builder.CardAction.imBack(session, "pull", "Pull data"));
+            } else {
+                buttons.push(builder.CardAction.imBack(session, "pull_image", "Pull image"));
+            }
+            buttons.push(builder.CardAction.imBack(session, "pull_tag", "Pull page tag"));
+            buttons.push(builder.CardAction.imBack(session, "alert", "Create alert"));
+
+            // prompt choices
+            let choices: any = ["pull", "pull_image", "pull_tag", "alert"];
+
+            // attachments
+            let attachments: any = [
+                new builder.HeroCard(session)
+                    .title(res.data.name)
+                    .subtitle("What would you like to do?")
+                    .images([
+                        builder.CardImage.create(session, getImageUrl(res.data)),
+                        builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/icon-32.png")
+                    ])
+                    .buttons(buttons)
+            ];
+
+            // create message
             let msg: any = new builder.Message(session)
                 .textFormat(builder.TextFormat.xml)
-                // .attachmentLayout(builder.AttachmentLayout.carousel)
-                .attachments([
-                    new builder.HeroCard(session)
-                        .title(res.data.name)
-                        .subtitle("What would you like to do?")
-                        .images([
-                            builder.CardImage.create(session, getImageUrl(res.data)),
-                            builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/icon-32.png")
-                        ])
-                        .buttons(buttons)
-                ]);
+                .attachments(attachments);
 
             builder.Prompts.choice(session, msg, choices.join("|"));
+
 
         }, (err) => {
             session.send("Failed to load page", err);
@@ -298,7 +324,7 @@ bot.dialog('/pull', [
                 console.log(table.toString());
 
                 msg = new builder.Message(session)
-                    .text("`" + table.toString() + "`"); // .replace(/(?:\r\n|\r|\n)/g, '  ')
+                    .text("`" + table.toString() + "`"); // .replace(/(?:\r\n|\r|\n)/g, "  \n"")
                 session.send(msg);
                 session.endDialog();
             }
@@ -378,4 +404,3 @@ function findAndSetTags(page: any) {
 function getImageUrl(page: any) {
     return `${config.ipushpull.docs_url}/export/image?pageId=${page.id}&config=slack`;
 }
-

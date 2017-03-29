@@ -2,6 +2,7 @@
 var config = require("./config");
 var ipp_service_1 = require("./ipp_service");
 var Table = require("cli-table2");
+var util = require('util');
 var builder = require('./core/');
 var restify = require('restify');
 var ipp = new ipp_service_1.IPushPull(config.ipushpull.username, config.ipushpull.password);
@@ -133,25 +134,39 @@ bot.dialog('/pull', [
             return;
         }
         ipp.getPage(pageName, folderName).then(function (res) {
-            var buttons = [
-                builder.CardAction.imBack(session, "pull", "Pull data"),
-                builder.CardAction.imBack(session, "pull_image", "Pull image"),
-                builder.CardAction.imBack(session, "pull_tag", "Pull page tag"),
-                builder.CardAction.imBack(session, "alert", "Create alert"),
-            ];
-            var choices = ["pull", "pull_image", "pull_tag", "alert"];
             if (session.message.address.channelId === "facebook") {
-                buttons.push({
-                    "type": "web_url",
-                    "url": "https://test.ipushpull.com/pages/embed/domains/IEX/pages/IEX_Summary",
-                    "title": "iPushPull Page",
-                    "webview_height_ratio": "compact"
+                var msgFb = new builder.Message(session)
+                    .sourceEvent({
+                    facebook: {
+                        attachment: {
+                            type: "template",
+                            payload: {
+                                template_type: "button",
+                                text: "Open live view",
+                                buttons: [
+                                    {
+                                        type: "web_url",
+                                        url: config.ipushpull.web_url + "/pages/embed/domains/" + folderName + "/pages/" + pageName,
+                                        title: "" + res.data.name,
+                                    }
+                                ]
+                            }
+                        }
+                    }
                 });
-                choices.push("url");
+                session.send(msgFb);
             }
-            var msg = new builder.Message(session)
-                .textFormat(builder.TextFormat.xml)
-                .attachments([
+            var buttons = [];
+            if (["emulator", "slack"].indexOf(session.message.address.channelId) != -1) {
+                buttons.push(builder.CardAction.imBack(session, "pull", "Pull data"));
+            }
+            else {
+                buttons.push(builder.CardAction.imBack(session, "pull_image", "Pull image"));
+            }
+            buttons.push(builder.CardAction.imBack(session, "pull_tag", "Pull page tag"));
+            buttons.push(builder.CardAction.imBack(session, "alert", "Create alert"));
+            var choices = ["pull", "pull_image", "pull_tag", "alert"];
+            var attachments = [
                 new builder.HeroCard(session)
                     .title(res.data.name)
                     .subtitle("What would you like to do?")
@@ -160,7 +175,10 @@ bot.dialog('/pull', [
                     builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/icon-32.png")
                 ])
                     .buttons(buttons)
-            ]);
+            ];
+            var msg = new builder.Message(session)
+                .textFormat(builder.TextFormat.xml)
+                .attachments(attachments);
             builder.Prompts.choice(session, msg, choices.join("|"));
         }, function (err) {
             session.send("Failed to load page", err);
