@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var da = require("../dialogs/DialogAction");
 var sd = require("../dialogs/SimpleDialog");
 var consts = require("../consts");

@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var Prompts_1 = require("./dialogs/Prompts");
 var Channel = require("./Channel");
 var consts = require("./consts");

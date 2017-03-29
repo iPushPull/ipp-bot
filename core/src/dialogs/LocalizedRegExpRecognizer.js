@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var RegExpRecognizer_1 = require("./RegExpRecognizer");
 var LocalizedRegExpRecognizer = (function () {
     function LocalizedRegExpRecognizer(intent, key, namespace) {

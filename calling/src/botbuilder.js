@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var ses = require("./CallSession");
 var dialog = require("./dialogs/Dialog");
 var actions = require("./dialogs/DialogAction");

@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var ResumeReason;
 (function (ResumeReason) {
     ResumeReason[ResumeReason["completed"] = 0] = "completed";

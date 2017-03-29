@@ -1,11 +1,18 @@
 "use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
 var config = require("./config");
 var ipp_api_1 = require("./ipp_api");
+var alert_collection_1 = require("./models/alert_provider/alert_collection");
 var events = require("events");
 var Table = require("cli-table2");
 var builder = require('./core/');
@@ -46,9 +53,22 @@ var IPushPull = (function (_super) {
     IPushPull.prototype.getDomainPages = function (folderId) {
         return this._api.getDomainPages(folderId);
     };
+    IPushPull.prototype.getTagValue = function (content, tag) {
+        var tagValue = undefined;
+        for (var i = 0; i < content.length; i++) {
+            for (var j = 0; j < content[i].length; j++) {
+                if (content[i][j].hasOwnProperty("tag") && content[i][j].tag.indexOf(tag) >= 0) {
+                    tagValue = content[i][j].formatted_value || content[i][j].value;
+                    break;
+                }
+            }
+        }
+        return tagValue;
+    };
     return IPushPull;
 }(events.EventEmitter));
 var ipp = new IPushPull(config.ipushpull.username, config.ipushpull.password);
+var alertCollection = new alert_collection_1.TagAlertCollection();
 ipp.auth().then(function (auth) {
     console.log(auth);
 }, function (err) {
@@ -121,52 +141,47 @@ bot.dialog('/', [
         var msg = new builder.Message(session).attachments([card]);
         session.send(msg);
         session.beginDialog('/pull');
-    },
-    function (session, results) {
-        session.beginDialog('/pull');
-    },
-    function (session, results) {
-        session.beginDialog('/pull');
     }
 ]);
-var folderName;
-var folderId;
-var pageName;
-var pageId;
-var domainPages = [];
 bot.dialog('/pull', [
     function (session) {
-        console.log("session data", session);
-        builder.Prompts.text(session, "What is your folder name?");
+        builder.Prompts.text(session, "What iPushPull folder would you like to work with?");
     },
     function (session, results) {
-        folderName = results.response;
+        session.userData.folderName = results.response;
         session.sendTyping();
-        ipp.getDomain(folderName).then(function (res) {
-            folderId = res.data.id;
-            ipp.getDomainPages(folderId).then(function (res) {
-                domainPages = [];
+        ipp.getDomain(session.userData.folderName).then(function (res) {
+            session.userData.folderId = res.data.id;
+            ipp.getDomainPages(session.userData.folderId).then(function (res) {
+                session.userData.domainPages = [];
                 for (var i = 0; i < res.data.pages.length; i++) {
                     if (res.data.pages[i].special_page_type != 0 || !res.data.pages[i].is_public) {
                         continue;
                     }
-                    domainPages.push(res.data.pages[i].name);
+                    session.userData.domainPages.push(res.data.pages[i].name);
                 }
-                builder.Prompts.choice(session, "Please select a page?", domainPages.join("|"));
+                session.send("Got it, here is the list of pages in " + session.userData.folderName);
+                session.sendTyping();
+                setTimeout(function () {
+                    builder.Prompts.choice(session, "", session.userData.domainPages.join("|"));
+                    session.send("What page would you like to work with? Type its number or name from the list above");
+                }, 2000);
             }, function (err) {
                 console.log(err);
                 session.send("Failed to load pages");
                 session.endDialog();
+                session.beginDialog("/pull");
             });
         }, function (err) {
             console.log(err);
             session.send("Failed to load folder");
             session.endDialog();
+            session.beginDialog("/pull", { hideMessage: true });
         });
     },
     function (session, results) {
-        pageName = results.response.entity;
-        if (domainPages.indexOf(pageName) == -1) {
+        session.userData.pageName = results.response.entity;
+        if (session.userData.domainPages.indexOf(session.userData.pageName) < 0) {
             session.send("Page does not exist");
             session.endDialog();
             return;
@@ -177,17 +192,18 @@ bot.dialog('/pull', [
             new builder.HeroCard(session)
                 .title("What would you like to do?")
                 .buttons([
-                builder.CardAction.imBack(session, "pull", "Pull page data"),
-                builder.CardAction.imBack(session, "alert", "Create Alert")
+                builder.CardAction.postBack(session, "pull_page", "Get the whole page"),
+                builder.CardAction.postBack(session, "pull_tag", "Get value of a tag")
             ])
         ]);
-        builder.Prompts.choice(session, msg, "pull|alert");
+        builder.Prompts.choice(session, msg, "pull_page|pull_tag");
     },
     function (session, results) {
         var func = results.response.entity;
         session.sendTyping();
-        ipp.getPage(pageName, folderName).then(function (res) {
-            if (func === "pull") {
+        ipp.getPage(session.userData.pageName, session.userData.folderName).then(function (res) {
+            session.userData.page = res.data;
+            if (func === "pull_page") {
                 var imageUrl = config.ipushpull.docs_url + "/export/image?pageId=" + res.data.id + "&config=slack";
                 var tableOptions = {
                     style: { border: [] },
@@ -218,16 +234,48 @@ bot.dialog('/pull', [
                 }
                 session.endDialog();
             }
-            if (func === "alert") {
-                builder.Prompts.text(session, "Set alert rule. Eg: tag_name >54.6, tag_name <30.2");
+            if (func === "pull_tag") {
+                builder.Prompts.text(session, "What is the name of tag you would like to get?");
             }
         }, function (err) {
             session.send("Failed to load page");
             session.endDialog();
         });
-    },
-    function (session, results) {
-        session.send("You entered '%s'. Your alert watcher has been started", results.response);
+    }, function (session, results) {
+        var tagName = results.response;
+        var tagVal = ipp.getTagValue(session.userData.page.content, tagName);
+        session.userData.tagName = tagName;
+        if (typeof tagVal !== "undefined") {
+            var msg = new builder.Message(session)
+                .textFormat(builder.TextFormat.xml)
+                .attachments([
+                new builder.HeroCard(session)
+                    .title(tagName)
+                    .text(tagVal)
+                    .buttons([
+                    builder.CardAction.dialogAction(session, "alert_create", null, "Create alert"),
+                ])
+            ]);
+            session.send(msg);
+        }
+        else {
+            session.send("This tag does not exist");
+        }
+    }
+]);
+bot.beginDialogAction("alert_create", "/alert");
+bot.dialog("/alert", [
+    function (session) {
+        builder.Prompts.text(session, "When would you like me to notify you? Use '<50' or '>50' for example");
+    }, function (session, results) {
+        var rule = results.response;
+        session.send("OK, I will let you know when " + session.userData.tagName + " is " + rule);
+        alertCollection.watchTag(session.userData.page.domain_id, session.userData.page.id, session.userData.tagName, rule, false, function (val) {
+            var msg = new builder.Message()
+                .address(session.message.address)
+                .text("YO! " + session.userData.tagName + " is " + rule + " ! Current value is " + val);
+            bot.send(msg);
+        });
         session.endDialog();
     }
 ]);

@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var uuid = require("node-uuid");
 var utils = require("../utils");
 exports.RecordingFormat = {

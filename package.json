@@ -29,6 +29,7 @@
     "request": "^2.78.0",
     "restify": "^4.2.0",
     "rsa-pem-from-mod-exp": "^0.8.4",
+    "socket.io-client": "^1.7.3",
     "sprintf-js": "^1.0.3",
     "url-join": "^1.1.0"
   },

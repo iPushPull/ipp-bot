@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var RecognizerFilter = (function () {
     function RecognizerFilter(recognizer) {
         this.recognizer = recognizer;

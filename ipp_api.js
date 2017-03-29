@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var merge = require("merge");
 var http = require("httpinvoke");
 var config = require("./config");
@@ -138,7 +139,7 @@ var ipushpull;
                 if (response.statusCode < 200 || response.statusCode > 299) {
                     return _this.handleError(response);
                 }
-                response.body = JSON.parse(response.body);
+                response.body = (response.body) ? JSON.parse(response.body) : undefined;
                 q.resolve({
                     success: true,
                     data: response.body,

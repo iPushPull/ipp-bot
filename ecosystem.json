@@ -1,0 +1,22 @@
+{
+  "apps":[{
+    "name": "ipp-bot",
+    "script": "app.js",
+    "max_memory_restart": "1200M",
+    "watch": true,
+    "ignore_watch": ["./**/*.ts","./**/*.map","./**/*.swp",".git",".idea","./**/*.log","node_modules","typings","v8heap","test","./public/bower_components"],
+    "watch_options": {
+      "usePolling": true,
+      "useFsEvents": false,
+      "atomic": false,
+      "followSymLinks": false
+    },
+    "env_development": {
+      "NODE_ENV": "development",
+      "DEBUG": "ipp:*"
+    },
+    "env_production": {
+      "NODE_ENV": "production"
+    }
+  }]
+}

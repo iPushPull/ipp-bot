@@ -584,7 +584,7 @@ export namespace ipushpull {
                 return this.handleError(response);
             }
 
-            response.body = JSON.parse(response.body);
+            response.body = (response.body) ? JSON.parse(response.body) : undefined;
 
             q.resolve({
                 success: true,

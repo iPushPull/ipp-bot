@@ -1,4 +1,5 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var RegExpRecognizer = (function () {
     function RegExpRecognizer(intent, expressions) {
         this.intent = intent;

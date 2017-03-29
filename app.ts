@@ -1,5 +1,6 @@
 import config = require("./config");
 import { ipushpull } from "./ipp_api";
+import {TagAlertCollection} from "./models/alert_provider/alert_collection"
 import Q = require("q");
 import * as events from "events";
 import Table = require("cli-table2");
@@ -70,9 +71,24 @@ class IPushPull extends events.EventEmitter {
         return this._api.getDomainPages(folderId);
     }
 
+    public getTagValue(content: any, tag: string){
+        let tagValue: string = undefined;
+
+        for (let i: number = 0; i < content.length; i++){
+            for (let j: number = 0; j < content[i].length; j++){
+                if (content[i][j].hasOwnProperty("tag") && content[i][j].tag.indexOf(tag) >= 0){
+                    tagValue = content[i][j].formatted_value || content[i][j].value;
+                    break;
+                }
+            }
+        }
+
+        return tagValue;
+    }
 }
 
 let ipp = new IPushPull(config.ipushpull.username, config.ipushpull.password);
+let alertCollection = new TagAlertCollection();
 
 // err, login
 ipp.auth().then((auth) => {
@@ -193,71 +209,60 @@ bot.dialog('/', [
         session.send(msg);
         // session.send("Hi... I'm the Microsoft Bot Framework demo bot for Skype. I can show you everything you can use our Bot Builder SDK to do on Skype.");
         session.beginDialog('/pull');
-    },
-    function (session, results) {
-        // Display menu
-        session.beginDialog('/pull');
-    },
-    function (session, results) {
-        // Always say goodbye
-        session.beginDialog('/pull');
     }
 ]);
 
-let folderName: string;
-let folderId: number;
-let pageName: string;
-let pageId: string;
-let domainPages: any = [];
-
 bot.dialog('/pull', [
-    function (session) {
-        console.log("session data", session);
-        // session.send("Pull a public page");
-        builder.Prompts.text(session, "What is your folder name?");
+    (session) => {
+        builder.Prompts.text(session, "What iPushPull folder would you like to work with?");
     },
     function (session, results) {
-
-        folderName = results.response;
+        session.userData.folderName = results.response;
 
         session.sendTyping();
 
         // get domain details
-        ipp.getDomain(folderName).then((res) => {
-
-            folderId = res.data.id;
+        ipp.getDomain(session.userData.folderName).then((res) => {
+            session.userData.folderId = res.data.id;
 
             // now get domain pages
-            ipp.getDomainPages(folderId).then((res) => {
+            ipp.getDomainPages(session.userData.folderId).then((res) => {
 
                 // create prompt for pages
-                domainPages = [];
+                session.userData.domainPages = [];
                 for (let i: number = 0; i < res.data.pages.length; i++) {
+                    // Filter out non-data and non-public pages
                     if (res.data.pages[i].special_page_type != 0 || !res.data.pages[i].is_public) {
                         continue;
                     }
-                    domainPages.push(res.data.pages[i].name);
+                    session.userData.domainPages.push(res.data.pages[i].name);
                 }
-                builder.Prompts.choice(session, "Please select a page?", domainPages.join("|"));
-
+                session.send("Got it, here is the list of pages in " + session.userData.folderName);
+                session.sendTyping();
+                setTimeout(() => {
+                    builder.Prompts.choice(session, "", session.userData.domainPages.join("|"));
+                    session.send("What page would you like to work with? Type its number or name from the list above");
+                }, 2000);                
             }, (err) => {
                 console.log(err);
                 session.send("Failed to load pages");
                 session.endDialog();
+                session.beginDialog("/pull");
             })
         }, (err) => {
             console.log(err);
             session.send("Failed to load folder");
             session.endDialog();
+            session.beginDialog("/pull", {hideMessage: true});
         })
         // session.send("You entered '%s'", results.response);
 
     },
     function (session, results) {
 
-        pageName = results.response.entity;
+        session.userData.pageName = results.response.entity;
 
-        if (domainPages.indexOf(pageName) == -1) {
+        if (session.userData.domainPages.indexOf(session.userData.pageName) < 0) {
             session.send("Page does not exist");
             session.endDialog();
             return;
@@ -270,15 +275,12 @@ bot.dialog('/pull', [
                 new builder.HeroCard(session)
                     .title("What would you like to do?")
                     .buttons([
-                        builder.CardAction.imBack(session, "pull", "Pull page data"),
-                        builder.CardAction.imBack(session, "alert", "Create Alert")
+                        builder.CardAction.postBack(session, "pull_page", "Get the whole page"),
+                        builder.CardAction.postBack(session, "pull_tag", "Get value of a tag")
                     ])
-            ]);
+            ]); 
 
-        // session.send(msg);
-
-        builder.Prompts.choice(session, msg, "pull|alert");
-
+        builder.Prompts.choice(session, msg, "pull_page|pull_tag");
     },
     function (session, results) {
 
@@ -286,9 +288,11 @@ bot.dialog('/pull', [
 
         session.sendTyping();
 
-        ipp.getPage(pageName, folderName).then((res) => {
+        // Get the page
+        ipp.getPage(session.userData.pageName, session.userData.folderName).then((res) => {
+            session.userData.page = res.data;
 
-            if (func === "pull") {
+            if (func === "pull_page") {
 
                 let imageUrl: string = `${config.ipushpull.docs_url}/export/image?pageId=${res.data.id}&config=slack`;
 
@@ -329,22 +333,58 @@ bot.dialog('/pull', [
 
             }
 
-            if (func === "alert") {
-
-                builder.Prompts.text(session, "Set alert rule. Eg: tag_name >54.6, tag_name <30.2");
-
+            if (func === "pull_tag") {
+                builder.Prompts.text(session, "What is the name of tag you would like to get?");
             }
-
 
         }, (err) => {
             session.send("Failed to load page");
             session.endDialog();
         });
-        // session.send("You entered '%s'", results.response);
-    },
-    function (session, results) {
-        session.send("You entered '%s'. Your alert watcher has been started", results.response);
-        session.endDialog();
+    }, (session, results) => {
+        let tagName: string = results.response;
+
+        let tagVal = ipp.getTagValue(session.userData.page.content, tagName);
+
+        session.userData.tagName = tagName;
+
+        if (typeof tagVal !== "undefined"){
+            let msg: any = new builder.Message(session)
+                .textFormat(builder.TextFormat.xml)
+                .attachments([
+                    new builder.HeroCard(session)
+                        .title(tagName)
+                        .text(tagVal)
+                        .buttons([
+                            builder.CardAction.dialogAction(session, "alert_create", null, "Create alert"),
+                        ])
+                ]); 
+
+            session.send(msg);
+        } else {
+            session.send("This tag does not exist");
+        }
     }
 ]);
 
+bot.beginDialogAction("alert_create", "/alert");
+
+bot.dialog("/alert", [
+    (session) => {
+        builder.Prompts.text(session,"When would you like me to notify you? Use '<50' or '>50' for example");
+    }, (session, results) => {
+        let rule: string = results.response;
+
+        session.send("OK, I will let you know when " + session.userData.tagName + " is " + rule);
+
+        alertCollection.watchTag(session.userData.page.domain_id, session.userData.page.id, session.userData.tagName, rule, false, (val) => {
+            let msg = new builder.Message()
+                .address(session.message.address)
+                .text("YO! " + session.userData.tagName + " is " + rule + " ! Current value is " + val);
+
+            bot.send(msg);    
+        });
+
+        session.endDialog();    
+    }
+]);
