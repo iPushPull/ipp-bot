@@ -20,7 +20,7 @@ like 'help'.
 
 -----------------------------------------------------------------------------*/
 
-var builder = require('./core/');
+var builder = require('botbuilder');
 var restify = require('restify');
 
 // @todo NOT HERE!
