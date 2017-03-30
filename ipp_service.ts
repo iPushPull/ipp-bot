@@ -30,10 +30,7 @@ export class IPushPull extends events.EventEmitter {
             this._accessToken = data.data.access_token;
             this._refreshToken = data.data.refresh_token;
             this._api.accessToken = data.data.access_token;
-            console.log("Login", data);
-            return true;
         }, (err) => {
-            console.log("Could not login!", err);
             return false;
         });
     }
@@ -50,4 +47,18 @@ export class IPushPull extends events.EventEmitter {
         return this._api.getDomainPages(folderId);
     }
 
+    public getTagValue(content: any, tag: string){
+        let tagValue: string = undefined;
+
+        for (let i: number = 0; i < content.length; i++){
+            for (let j: number = 0; j < content[i].length; j++){
+                if (content[i][j].hasOwnProperty("tag") && content[i][j].tag.indexOf(tag) >= 0){
+                    tagValue = content[i][j].formatted_value || content[i][j].value;
+                    break;
+                }
+            }
+        }
+
+        return tagValue;
+    }
 }

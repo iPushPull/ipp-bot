@@ -29,9 +29,10 @@ let alertCollection = new TagAlertCollection();
 
 // err, login
 ipp.auth().then((auth) => {
-    console.log(auth);
+    console.log("Logged in!");
 }, (err) => {
-    console.log(err);
+    console.log("Couldn't login");
+    throw new Error("Couldn't login");
 });
 
 //=========================================================
@@ -191,7 +192,7 @@ bot.dialog('/pull', [
             console.log(err);
             session.send("Failed to load folder");
             session.endDialog();
-            session.beginDialog("/pull", {hideMessage: true});
+            session.beginDialog("/pull");
         })
         // session.send("You entered '%s'", results.response);
 
@@ -207,7 +208,7 @@ bot.dialog('/pull', [
             return;
         }
 
-        ipp.getPage(pageName, folderName).then((res) => {
+        ipp.getPage(session.userData.pageName, session.userData.folderName).then((res) => {
 
             // show in overlay. facebook only
             if (session.message.address.channelId === "facebook") {
@@ -223,7 +224,7 @@ bot.dialog('/pull', [
                                     buttons: [
                                         {
                                             type: "web_url",
-                                            url: `${config.ipushpull.web_url}/pages/embed/domains/${folderName}/pages/${pageName}`,
+                                            url: `${config.ipushpull.web_url}/pages/embed/domains/${session.userData.folderName}/pages/${session.userData.pageName}`,
                                             title: `${res.data.name}`,
                                             // webview_height_ratio: "compact"
                                         }
@@ -235,20 +236,7 @@ bot.dialog('/pull', [
 
                 session.send(msgFb);
             }
-
-            // setup buttons
-            let buttons: any = [];
-            if (["emulator", "slack"].indexOf(session.message.address.channelId) != -1) {
-                buttons.push(builder.CardAction.imBack(session, "pull", "Pull page data"));
-            } else {
-                buttons.push(builder.CardAction.imBack(session, "pull_image", "Image snapshot"));
-            }
-            buttons.push(builder.CardAction.imBack(session, "pull_tag", "Pull page tag"));
-            buttons.push(builder.CardAction.imBack(session, "alert", "Create alert"));
-
-            // prompt choices
-            let choices: any = ["pull", "pull_image", "pull_tag", "alert"];
-
+        
             // attachments
             let attachments: any = [
                 new builder.HeroCard(session)
@@ -258,44 +246,37 @@ bot.dialog('/pull', [
                         builder.CardImage.create(session, getImageUrl(res.data)),                       
                     ])
                     .buttons([
-                        builder.CardAction.postBack(session, "pull_page", "Get the whole page"),
+                        builder.CardAction.postBack(session, (["emulator", "slack"].indexOf(session.message.address.channelId) != -1) ? "pull_table" : "pull_image", "Get the whole page"),
                         builder.CardAction.postBack(session, "pull_tag", "Get value of a tag")
                     ])
-            ]);
+            ];
 
             // create message
             let msg: any = new builder.Message(session)
                 .textFormat(builder.TextFormat.xml)
                 .attachments(attachments);
 
-            builder.Prompts.choice(session, msg, choices.join("|"));
-
+            builder.Prompts.choice(session, msg, "pull_table|pull_image|pull_tag");
 
         }, (err) => {
             session.send("Failed to load page", err);
             session.endDialog();
         });
-
-
     },
     // act on page actions
     function (session, results) {
-
         let func: string = results.response.entity;
 
         session.sendTyping();
 
         // Get the page
-        ipp.getPage(session.userData.pageName, session.userData.folderName).then((res) => {
-            session.userData.page = res.data;
-
-            // get them tags
-            findAndSetTags(res.data);
+        ipp.getPage(session.userData.pageName, session.userData.folderName).then((res) => { console.log("Page loaded");
+            session.userData.page = res.data;            
 
             let msg: any;
 
             // show table as string
-            if (func === "pull") {
+            if (func === "pull_table") {
 
                 let tableOptions: any = {
                     style: { border: [] },
@@ -329,10 +310,10 @@ bot.dialog('/pull', [
             }
 
             if (func === "pull_tag") {
-                session.userData.func = "pull_tag";
+                // get them tags            
+                let pageTags = findAndSetTags(res.data);
 
                 builder.Prompts.choice(session, "Please enter the tag name", Object.keys(pageTags).join("|"));
-                // builder.Prompts.text(session, "Please enter the tag name");
             }
 
         }, (err) => {
@@ -340,7 +321,7 @@ bot.dialog('/pull', [
             session.endDialog();
         });
     }, (session, results) => {
-        let tagName: string = results.response;
+        let tagName: string = results.response.entity;
 
         let tagVal = ipp.getTagValue(session.userData.page.content, tagName);
 
@@ -386,3 +367,30 @@ bot.dialog("/alert", [
         session.endDialog();    
     }
 ]);
+
+let findAndSetTags = (page: any) => {
+    let pageTags = {};
+    for (let i: number = 0; i < page.content.length; i++) {
+        for (let k: number = 0; k < page.content[i].length; k++) {
+            if (!page.content[i][k].tag) {
+                continue;
+            }
+            let tags: any = page.content[i][k].tag;
+            for (let t: number = 0; t < tags.length; t++) {
+                pageTags[tags[t]] = {
+                    tag: tags[t],
+                    tags: page.content[i][k].tag,
+                    value: page.content[i][k].formatted_value || page.content[i][k].value,
+                    row: i,
+                    col: k
+                };
+            }
+        }
+    }
+
+    return pageTags;
+}
+
+let getImageUrl = (page: any) => {
+    return `${config.ipushpull.docs_url}/export/image?pageId=${page.id}&config=slack`;
+}

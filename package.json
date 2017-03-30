@@ -13,26 +13,16 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "async": "^1.5.2",
-    "base64url": "^1.0.6",
+    "@types/node": "^7.0.12",
+    "@types/q": "^1.0.0",
+    "@types/restify": "^2.0.42",
     "botbuilder": "^3.7.0",
-    "busboy": "^0.2.13",
-    "chrono-node": "^1.2.5",
     "cli-table2": "^0.2.0",
     "httpinvoke": "^1.4.0",
-    "install": "^0.8.7",
-    "jsonwebtoken": "^7.1.9",
     "merge": "^1.2.0",
-    "node-uuid": "^1.4.7",
-    "npm": "^4.4.4",
-    "promise": "^7.1.1",
     "q": "^1.5.0",
-    "request": "^2.78.0",
     "restify": "^4.2.0",
-    "rsa-pem-from-mod-exp": "^0.8.4",
-    "socket.io-client": "^1.7.3",
-    "sprintf-js": "^1.0.3",
-    "url-join": "^1.1.0"
+    "socket.io-client": "^1.7.3"
   },
   "homepage": "https://bitbucket.org/ipushpull/ipp-bot#readme"
 }
