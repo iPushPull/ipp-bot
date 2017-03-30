@@ -273,6 +273,7 @@ export namespace ipushpull {
         }
 
         public getDomainByName(domainName: string): IPromise<IRequestResult>{
+            console.log("getDomainByName", this._endPoint + "/domains/name/" + domainName + "/");
             return this.send(Request.get(this._endPoint + "/domains/name/" + domainName + "/"));
         }
 
@@ -535,6 +536,9 @@ export namespace ipushpull {
         }
 
         private send(request: Request): IPromise<IRequestResult> {
+
+            console.log("send", this.accessToken, request);
+            
             // Add auth header
             request.headers({
                 "Authorization": `Bearer ${(this.accessToken) ? this.accessToken : "null"}`,

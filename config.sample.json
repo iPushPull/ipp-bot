@@ -1,16 +1,15 @@
 {
     "ipushpull": {
         "endpoint": "https://www.ipushpull.com/api/1.0",
+        "web_url": "https://test.ipushpull.com",
         "docs_url": "https://docs.ipushpull.com",
-        "api_key": "LC8aOmGqqydL3n8HyKaz8ue34M13WPux2zyuBAl1",
-        "api_secret": "kXXRR7jsoEm6JgjvBDYGca1YlGIDynuxpM9kiu9GTlqzLtmCvNWLm3pmzWUc6Uptp4DwvS1kLlC6mh5PHGGnKRNh0eBPG1IIUB5NtsEY1oSgqLcteNCdGBLnIwnOO7SY",
-        "username": "kyle.hengst@ipushpull.com",
-        "password": "123",
-        "folderId": 462,
-        "folderName": "kyle"
+        "api_key": "xxx",
+        "api_secret": "xxx",
+        "username": "email@domain.com",
+        "password": "xxx"
     },
     "bot": {
-        "appId": "b8ed13a3-ac18-43a8-a62a-070034fa2f7c",
-        "appPassword": "kJThruircakYOwdr9WvrUg5"
+        "appId": "xxx",
+        "appPassword": "xxx"
     }
 }

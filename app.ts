@@ -1,9 +1,9 @@
 import config = require("./config");
-import { ipushpull } from "./ipp_api";
 import {TagAlertCollection} from "./models/alert_provider/alert_collection"
 import Q = require("q");
-import * as events from "events";
+import { IPushPull } from "./ipp_service";
 import Table = require("cli-table2");
+const util = require('util');
 
 /*-----------------------------------------------------------------------------
 This Bot demonstrates how to create a simple First Run experience for a bot.
@@ -23,70 +23,7 @@ like 'help'.
 var builder = require('botbuilder');
 var restify = require('restify');
 
-// @todo NOT HERE!
-let accessToken: string;
-let refreshToken: string;
-
-class IPushPull extends events.EventEmitter {
-    private _username: string;
-    private _password: string;
-
-    private _api: IApiService;
-
-    constructor(username: string, password: string) {
-        super();
-
-        this._username = username;
-        this._password = password;
-
-        this._api = new ipushpull.Api(config.ipushpull.endpoint);
-
-    }
-
-    public auth() {
-        return this._api.userLogin({
-            email: this._username,
-            password: this._password,
-        }).then((data) => {
-            accessToken = data.data.access_token;
-            refreshToken = data.data.refresh_token;
-            this._api.accessToken = data.data.access_token;
-            console.log("Login", data);
-            return true;
-        }, (err) => {
-            console.log("Could not login!", err);
-            return false;
-        });
-    }
-
-    public getPage(pageName: string, folderName: string) {
-        return this._api.getPageByName({ domainId: folderName, pageId: pageName });
-    }
-
-    public getDomain(folderName: string) {
-        return this._api.getDomainByName(folderName);
-    }
-
-    public getDomainPages(folderId: number) {
-        return this._api.getDomainPages(folderId);
-    }
-
-    public getTagValue(content: any, tag: string){
-        let tagValue: string = undefined;
-
-        for (let i: number = 0; i < content.length; i++){
-            for (let j: number = 0; j < content[i].length; j++){
-                if (content[i][j].hasOwnProperty("tag") && content[i][j].tag.indexOf(tag) >= 0){
-                    tagValue = content[i][j].formatted_value || content[i][j].value;
-                    break;
-                }
-            }
-        }
-
-        return tagValue;
-    }
-}
-
+// create ipp service
 let ipp = new IPushPull(config.ipushpull.username, config.ipushpull.password);
 let alertCollection = new TagAlertCollection();
 
@@ -96,7 +33,6 @@ ipp.auth().then((auth) => {
 }, (err) => {
     console.log(err);
 });
-
 
 //=========================================================
 // Bot Setup
@@ -167,6 +103,7 @@ bot.on('deleteUserData', function (message) {
 });
 
 
+
 //=========================================================
 // Bots Middleware
 //=========================================================
@@ -200,10 +137,10 @@ bot.dialog('/', [
 
         // Send a greeting and show help.
         var card = new builder.HeroCard(session)
-            .title("ipushpull bot")
+            .title("ipushpull page bot")
             // .text("Your bots - wherever your users are talking.")
             .images([
-                builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/icon-32.png")
+                builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/twitter-card.png")
             ]);
         var msg = new builder.Message(session).attachments([card]);
         session.send(msg);
@@ -216,6 +153,7 @@ bot.dialog('/pull', [
     (session) => {
         builder.Prompts.text(session, "What iPushPull folder would you like to work with?");
     },
+    // show folder pages
     function (session, results) {
         session.userData.folderName = results.response;
 
@@ -258,6 +196,7 @@ bot.dialog('/pull', [
         // session.send("You entered '%s'", results.response);
 
     },
+    // page actions
     function (session, results) {
 
         session.userData.pageName = results.response.entity;
@@ -268,20 +207,78 @@ bot.dialog('/pull', [
             return;
         }
 
-        let msg: any = new builder.Message(session)
-            .textFormat(builder.TextFormat.xml)
-            // .attachmentLayout(builder.AttachmentLayout.carousel)
-            .attachments([
+        ipp.getPage(pageName, folderName).then((res) => {
+
+            // show in overlay. facebook only
+            if (session.message.address.channelId === "facebook") {
+
+                let msgFb: any = new builder.Message(session)
+                    .sourceEvent({
+                        facebook: {
+                            attachment: {
+                                type: "template",
+                                payload: {
+                                    template_type: "button",
+                                    text: "Open live view",
+                                    buttons: [
+                                        {
+                                            type: "web_url",
+                                            url: `${config.ipushpull.web_url}/pages/embed/domains/${folderName}/pages/${pageName}`,
+                                            title: `${res.data.name}`,
+                                            // webview_height_ratio: "compact"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    });
+
+                session.send(msgFb);
+            }
+
+            // setup buttons
+            let buttons: any = [];
+            if (["emulator", "slack"].indexOf(session.message.address.channelId) != -1) {
+                buttons.push(builder.CardAction.imBack(session, "pull", "Pull page data"));
+            } else {
+                buttons.push(builder.CardAction.imBack(session, "pull_image", "Image snapshot"));
+            }
+            buttons.push(builder.CardAction.imBack(session, "pull_tag", "Pull page tag"));
+            buttons.push(builder.CardAction.imBack(session, "alert", "Create alert"));
+
+            // prompt choices
+            let choices: any = ["pull", "pull_image", "pull_tag", "alert"];
+
+            // attachments
+            let attachments: any = [
                 new builder.HeroCard(session)
-                    .title("What would you like to do?")
+                    .title(res.data.name)
+                    .subtitle("What would you like to do?")
+                    .images([
+                        builder.CardImage.create(session, getImageUrl(res.data)),                       
+                    ])
                     .buttons([
                         builder.CardAction.postBack(session, "pull_page", "Get the whole page"),
                         builder.CardAction.postBack(session, "pull_tag", "Get value of a tag")
                     ])
-            ]); 
+            ]);
 
-        builder.Prompts.choice(session, msg, "pull_page|pull_tag");
+            // create message
+            let msg: any = new builder.Message(session)
+                .textFormat(builder.TextFormat.xml)
+                .attachments(attachments);
+
+            builder.Prompts.choice(session, msg, choices.join("|"));
+
+
+        }, (err) => {
+            session.send("Failed to load page", err);
+            session.endDialog();
+        });
+
+
     },
+    // act on page actions
     function (session, results) {
 
         let func: string = results.response.entity;
@@ -292,9 +289,13 @@ bot.dialog('/pull', [
         ipp.getPage(session.userData.pageName, session.userData.folderName).then((res) => {
             session.userData.page = res.data;
 
-            if (func === "pull_page") {
+            // get them tags
+            findAndSetTags(res.data);
 
-                let imageUrl: string = `${config.ipushpull.docs_url}/export/image?pageId=${res.data.id}&config=slack`;
+            let msg: any;
+
+            // show table as string
+            if (func === "pull") {
 
                 let tableOptions: any = {
                     style: { border: [] },
@@ -307,34 +308,31 @@ bot.dialog('/pull', [
                     }));
                 }
 
-                let msg: any;
+                console.log(table.toString());
 
-                switch (session.message.address.channelId) {
-                    case "slack":
-                    case "emulator":
-                        // show table as string
-                        msg = new builder.Message(session)
-                            .text("`" + table.toString() + "`");
-                        session.send(msg);
-                        console.log(table.toString());
-                        break;
-                    default:
-                        // show table as image
-                        msg = new builder.Message(session)
-                            .attachments([{
-                                contentType: "image/jpeg",
-                                contentUrl: imageUrl
-                            }]);
-                        session.send(msg);
-                        break;
-                }
-
+                msg = new builder.Message(session)
+                    .text("`" + table.toString() + "`"); // .replace(/(?:\r\n|\r|\n)/g, "  \n"")
+                session.send(msg);
                 session.endDialog();
+            }
 
+            // show table as image
+            if (func === "pull_image") {
+                msg = new builder.Message(session)
+                    .attachments([{
+                        contentType: "image/jpeg",
+                        contentUrl: getImageUrl(res.data),
+                    }]);
+
+                session.send(msg);
+                session.endDialog();
             }
 
             if (func === "pull_tag") {
-                builder.Prompts.text(session, "What is the name of tag you would like to get?");
+                session.userData.func = "pull_tag";
+
+                builder.Prompts.choice(session, "Please enter the tag name", Object.keys(pageTags).join("|"));
+                // builder.Prompts.text(session, "Please enter the tag name");
             }
 
         }, (err) => {
