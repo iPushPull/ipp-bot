@@ -119,6 +119,9 @@ bot.use(builder.Middleware.dialogVersion({ version: 1.0, resetCommand: /^reset/i
 bot.endConversationAction('goodbye', 'Goodbye :)', { matches: /^goodbye/i });
 bot.beginDialogAction('help', '/help', { matches: /^help/i });
 
+bot.beginDialogAction("hello", "hello", {matches: /hi|hello/i});
+bot.beginDialogAction("old", "/pull", {matches: /old/i});
+
 // receive external trigger
 bot.on('trigger', function (message) {
     // handle message from trigger function
@@ -133,20 +136,261 @@ bot.on('trigger', function (message) {
 // Bots Dialogs
 //=========================================================
 
-bot.dialog('/', [
-    function (session) {
+bot.dialog("/", [
+    (session) => {
+        session.replaceDialog("hello");
+    }
+]);
 
+bot.dialog('hello', [
+    (session)=> {
         // Send a greeting and show help.
-        var card = new builder.HeroCard(session)
-            .title("ipushpull page bot")
-            // .text("Your bots - wherever your users are talking.")
+        let card = new builder.HeroCard(session)
+            .title("iPushPull Data Bot")
+            .subtitle("Hi " + session.message.address.user.name + ", I'm your very own data bot and I can pull any ipushpull data into a chat.")
+            .text("What would you like to do today?")
             .images([
                 builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/twitter-card.png")
+            ])
+            .buttons([
+                builder.CardAction.postBack(session, "action_pull", "See a page"),
+                builder.CardAction.postBack(session, "action_tag", "Pull tagged data"),
+                builder.CardAction.postBack(session, "action_alert", "Setup an alert"),
             ]);
-        var msg = new builder.Message(session).attachments([card]);
+        let msg = new builder.Message(session).attachments([card]);
+
+        builder.Prompts.choice(session, msg, "action_pull|action_tag|action_alert");
+    }, (session, results) => {
+        session.userData.action = results.response.entity;
+        session.beginDialog("folderPageSelect");
+    }
+]);
+
+bot.dialog("folderPageSelect", [
+    (session) => {
+        builder.Prompts.text(session, "What folder would you like to work with?");
+    },
+    (session, results) => {
+        session.userData.folderName = results.response;
+
+        session.sendTyping();
+
+        // get domain details
+        ipp.getDomain(session.userData.folderName).then((res) => {
+            session.userData.folderId = res.data.id;
+
+            session.send("Great, and which page?");
+
+            session.sendTyping();
+
+            // now get domain pages
+            ipp.getDomainPages(session.userData.folderId).then((res) => {
+                // create prompt for pages
+                session.userData.domainPages = [];
+                for (let i: number = 0; i < res.data.pages.length; i++) {
+                    // Filter out non-data and non-public pages
+                    if (res.data.pages[i].special_page_type != 0 || !res.data.pages[i].is_public) {
+                        continue;
+                    }
+                    session.userData.domainPages.push(res.data.pages[i].name);
+                }                
+                builder.Prompts.choice(session, "", session.userData.domainPages.join("|"));
+                // session.send("What page would you like to work with? Type its number or name from the list above");    
+            }, (err) => {
+                console.log(err);
+                session.send("Failed to load pages");
+                session.replaceDialog("folderPageSelect");
+            })
+        }, (err) => {
+            console.log(err);
+            session.send("Failed to load folder");
+            session.replaceDialog("folderPageSelect");
+        })
+    }, (session, results) => {
+        session.userData.pageName = results.response.entity;
+
+        if (session.userData.domainPages.indexOf(session.userData.pageName) < 0) {
+            session.send("Page does not exist");
+            session.replaceDialog("folderPageSelect");
+            return;
+        }
+
+        ipp.getPage(session.userData.pageName, session.userData.folderName).then((res) => {
+            session.userData.page = res.data;
+            session.replaceDialog("actionRouter");
+        }, (err) => {
+            session.send("Failed to load page", err);
+            session.replaceDialog("folderPageSelect");
+        });
+    }
+]);
+
+bot.dialog("selectTag", [
+    (session) => {
+        // get them tags            
+        let pageTags = findAndSetTags(session.userData.page);
+
+        builder.Prompts.choice(session, "Please enter the tag name", Object.keys(pageTags).join("|"));
+    }, (session, results) => {
+        session.userData.tagName = results.response.entity;
+        session.userData.tagVal = ipp.getTagValue(session.userData.page.content, session.userData.tagName);
+
+        if (typeof session.userData.tagVal !== "undefined"){
+            session.replaceDialog("actionTag");
+        } else {
+            session.send("This tag does not exist");
+            session.replaceDialog("selectTag");
+        }
+    }
+]);
+
+bot.dialog("actionRouter", [
+    (session) => {
+        switch(session.userData.action){
+            case "action_pull":
+                session.replaceDialog("actionPull");
+                break;
+            case "action_tag": 
+                session.replaceDialog("selectTag");
+                break;
+            case "action_alert":
+                session.replaceDialog("selectTag");
+                break;
+
+            default: 
+                session.endDialog();
+                session.beginDialog("hello");               
+        }
+    }
+]);
+
+bot.dialog("actionPull", [
+    (session) => {
+        // show in overlay. facebook only
+        if (session.message.address.channelId === "facebook") {
+            let msgFb: any = new builder.Message(session)
+                .sourceEvent({
+                    facebook: {
+                        attachment: {
+                            type: "template",
+                            payload: {
+                                template_type: "button",
+                                text: "Open live view",
+                                buttons: [
+                                    {
+                                        type: "web_url",
+                                        url: `${config.ipushpull.web_url}/pages/embed/domains/${session.userData.folderName}/pages/${session.userData.pageName}`,
+                                        title: `${session.userData.page.name}`,
+                                        // webview_height_ratio: "compact"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                });
+            session.send(msgFb);
+        }
+
+        // attachments
+        let attachments: any = [
+            new builder.HeroCard(session)
+                .title(session.userData.page.name)
+                .subtitle("What would you like to do?")
+                .images([
+                    builder.CardImage.create(session, getImageUrl(session.userData.page)),                       
+                ])
+                .buttons([
+                    builder.CardAction.postBack(session, (["emulator", "slack"].indexOf(session.message.address.channelId) != -1) ? "pull_table" : "pull_image", "Get the whole page"),
+                    builder.CardAction.postBack(session, "pull_tag", "Get value of a tag")
+                ])
+        ];
+
+        // create message
+        let msg: any = new builder.Message(session)
+            .textFormat(builder.TextFormat.xml)
+            .attachments(attachments);
+
+        builder.Prompts.choice(session, msg, "pull_table|pull_image|pull_tag"); 
+    }, (session, results) => {
+            let func: string = results.response.entity; 
+
+            let msg: any;
+
+            // show table as string
+            if (func === "pull_table") {
+                let tableOptions: any = {
+                    style: { border: [] },
+                };
+                let table: any = new Table(tableOptions);
+
+                for (let i: number = 0; i < session.userData.page.content.length; i++) {
+                    table.push(session.userData.page.content[i].map((cell) => {
+                        return cell.formatted_value || cell.value;
+                    }));
+                }
+
+                console.log(table.toString());
+
+                msg = new builder.Message(session)
+                    .text("`" + table.toString() + "`"); // .replace(/(?:\r\n|\r|\n)/g, "  \n"")
+                session.send(msg);
+                session.endDialog();
+            }
+
+            // show table as image
+            if (func === "pull_image") {
+                msg = new builder.Message(session)
+                    .attachments([{
+                        contentType: "image/jpeg",
+                        contentUrl: getImageUrl(session.userData.page),
+                    }]);
+
+                session.send(msg);
+                session.endDialog();
+            }
+
+            if (func === "pull_tag") {
+                session.replaceDialog("selectTag");
+            }
+    }
+]);
+
+bot.dialog("actionTag", [
+    (session) => {
+        let msg: any = new builder.Message(session)
+            .textFormat(builder.TextFormat.xml)
+            .attachments([
+                new builder.HeroCard(session)
+                    .title(session.userData.tagName)
+                    .text(session.userData.tagVal)
+                    .buttons([
+                        builder.CardAction.dialogAction(session, "actionAlert", null, "Create alert"),
+                    ])
+            ]); 
+
         session.send(msg);
-        // session.send("Hi... I'm the Microsoft Bot Framework demo bot for Skype. I can show you everything you can use our Bot Builder SDK to do on Skype.");
-        session.beginDialog('/pull');
+    }
+]);
+
+bot.beginDialogAction("actionAlert", "actionAlert");
+
+bot.dialog("actionAlert", [
+    (session) => {
+        builder.Prompts.text(session,"When would you like me to notify you? (Use '<50' or '>50' for example)");
+    }, (session, results) => {
+        let rule: string = results.response;
+
+        session.send("OK, I will let you know when " + session.userData.tagName + " is " + rule);
+
+        alertCollection.watchTag(session.userData.page.domain_id, session.userData.page.id, session.userData.tagName, rule, false, (val) => {
+            let msg = new builder.Message()
+                .address(session.message.address)
+                .text("YO! " + session.userData.tagName + " is " + rule + " ! Current value is " + val);
+
+            bot.send(msg);    
+        });
+
+        session.endDialog();    
     }
 ]);
 
