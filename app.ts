@@ -122,6 +122,13 @@ bot.beginDialogAction('help', '/help', { matches: /^help/i });
 bot.beginDialogAction("hello", "hello", {matches: /hi|hello/i});
 bot.beginDialogAction("old", "/pull", {matches: /old/i});
 
+// Get tagged data
+// bot.beginDialogAction("free_tag", "freeTextTag", {matches: [/What is microsofts share price?/i, /What is the size of the last trade in microsoft?/i, /What is the current volume in microsoft?/i]});
+bot.beginDialogAction("free_tag", "freeTextTag", {matches: [/What is *?/i]});
+
+// Request alarm
+bot.beginDialogAction("free_alert", "freeTextAlert", {matches: [/Let me know when *?/i]})
+
 // receive external trigger
 bot.on('trigger', function (message) {
     // handle message from trigger function
@@ -150,7 +157,7 @@ bot.dialog('hello', [
             .subtitle("Hi " + session.message.address.user.name + ", I'm your very own data bot and I can pull any ipushpull data into a chat.")
             .text("What would you like to do today?")
             .images([
-                builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/twitter-card.png")
+                builder.CardImage.create(session, "https://ipushpull.s3.amazonaws.com/static/prd/bot-hero.jpg")
             ])
             .buttons([
                 builder.CardAction.postBack(session, "action_pull", "See a page"),
@@ -185,6 +192,9 @@ bot.dialog("folderPageSelect", [
 
             // now get domain pages
             ipp.getDomainPages(session.userData.folderId).then((res) => {
+                let buttons = [];
+                let actions = [];
+
                 // create prompt for pages
                 session.userData.domainPages = [];
                 for (let i: number = 0; i < res.data.pages.length; i++) {
@@ -193,8 +203,20 @@ bot.dialog("folderPageSelect", [
                         continue;
                     }
                     session.userData.domainPages.push(res.data.pages[i].name);
+
+                    buttons.push(builder.CardAction.postBack(session, res.data.pages[i].name, res.data.pages[i].name));
+                    actions.push(res.data.pages[i].name);
                 }                
-                builder.Prompts.choice(session, "", session.userData.domainPages.join("|"));
+
+                let card = new builder.HeroCard(session)
+                    .title("Available pages")
+                    .text("Select one of the pages")
+                    .buttons(buttons);
+                let msg = new builder.Message(session).attachments([card]);
+
+                builder.Prompts.choice(session, msg, actions.join("|"));
+
+                // builder.Prompts.choice(session, "", session.userData.domainPages.join("|"));
                 // session.send("What page would you like to work with? Type its number or name from the list above");    
             }, (err) => {
                 console.log(err);
@@ -229,18 +251,141 @@ bot.dialog("selectTag", [
     (session) => {
         // get them tags            
         let pageTags = findAndSetTags(session.userData.page);
+        let buttons = [];
 
-        builder.Prompts.choice(session, "Please enter the tag name", Object.keys(pageTags).join("|"));
+        for (let k in pageTags) {
+            buttons.push(builder.CardAction.postBack(session, k, k));
+        }
+
+        let card = new builder.HeroCard(session)
+            .title("Available tags")
+            .text("Select one of the tags")
+            .buttons(buttons);
+        let msg = new builder.Message(session).attachments([card]);
+
+        builder.Prompts.choice(session, msg, Object.keys(pageTags).join("|"));
     }, (session, results) => {
         session.userData.tagName = results.response.entity;
         session.userData.tagVal = ipp.getTagValue(session.userData.page.content, session.userData.tagName);
 
         if (typeof session.userData.tagVal !== "undefined"){
-            session.replaceDialog("actionTag");
+            if (session.userData.action === "action_alert"){
+                session.replaceDialog("actionAlert");
+            } else {
+                session.replaceDialog("actionTag");
+            }            
         } else {
             session.send("This tag does not exist");
             session.replaceDialog("selectTag");
         }
+    }
+]);
+
+bot.dialog("askForFreeText", [
+    (session, results) => {
+        session.send(results.msg);
+    }
+]);
+
+bot.dialog("freeTextTag", [
+    (session) => {
+        let symbolMap = {
+            BAC: "Bank Of America",
+            C: "Citigroup",
+            F: "Ford Motor",
+            GE: "General Electric Co",
+            GM: "General Motors Co",
+            HPE: "Hewlett Packard",
+            JPM:"Jpmorgan Chase & Co",
+            KO: "Coca-cola Co/the",
+            MO: "Altria Group Inc",
+            MRK: "Merck & Co. Inc.",
+            MRO: "Marathon Oil Corp",
+            MS: "Morgan Stanley",
+            MSFT: "Microsoft Corp",
+            NKE: "Nike Inc -Cl B",
+            ORCL: "Oracle Corp",
+            PFE: "Pfizer Inc",
+            S: "Sprint Corp",
+            SLB: "Schlumberger Ltd",
+            SNAP: "Snap Inc - A",
+            T: "At&t Inc",
+            TWTR: "Twitter Inc",
+            VZ: "Verizon Communications Inc",
+            X: "United States Steel Corp",
+        };
+
+        let text: string = session.message.text;
+
+        switch(text){
+            case "What is microsofts share price?": 
+                session.userData.tagName = "MSFT.lastSalePrice";
+                break;
+
+            case "What is the size of the last trade in microsoft?": 
+                session.userData.tagName = "MSFT.lastSaleSize";
+                break;
+
+            case "What is the current volume in microsoft?":
+                session.userData.tagName = "MSFT.volume";
+                break;  
+
+            default:
+                session.send("Sorry I didn't understand that, please try again");
+                return;      
+        }
+
+        session.replaceDialog("actionTag");
+    }
+]);
+
+bot.dialog("freeTextAlert", [
+    (session) => {
+        let symbolMap = {
+            BAC: "Bank Of America",
+            C: "Citigroup",
+            F: "Ford Motor",
+            GE: "General Electric Co",
+            GM: "General Motors Co",
+            HPE: "Hewlett Packard",
+            JPM:"Jpmorgan Chase & Co",
+            KO: "Coca-cola Co/the",
+            MO: "Altria Group Inc",
+            MRK: "Merck & Co. Inc.",
+            MRO: "Marathon Oil Corp",
+            MS: "Morgan Stanley",
+            MSFT: "Microsoft Corp",
+            NKE: "Nike Inc -Cl B",
+            ORCL: "Oracle Corp",
+            PFE: "Pfizer Inc",
+            S: "Sprint Corp",
+            SLB: "Schlumberger Ltd",
+            SNAP: "Snap Inc - A",
+            T: "At&t Inc",
+            TWTR: "Twitter Inc",
+            VZ: "Verizon Communications Inc",
+            X: "United States Steel Corp",
+        };
+
+        let text: string = session.message.text;
+
+        switch(text){
+            case "Let me know when microsoft shares trade above $66.00": 
+                session.userData.tagName = "MSFT.lastSalePrice";
+                session.userData.alertRule = ">66"
+                break;
+
+            case "Let me know when volume is higher than 100000 shares": 
+                session.userData.tagName = "MSFT.volume";
+                session.userData.alertRule = ">100000";
+                break;
+
+            default:
+                session.send("Sorry I didn't understand that, please try again");
+                return;      
+        }
+
+        session.replaceDialog("createAlert");
     }
 ]);
 
@@ -251,10 +396,10 @@ bot.dialog("actionRouter", [
                 session.replaceDialog("actionPull");
                 break;
             case "action_tag": 
-                session.replaceDialog("selectTag");
+                session.replaceDialog("askForFreeText", {msg: "What data would you like to see?"});
                 break;
             case "action_alert":
-                session.replaceDialog("selectTag");
+                session.replaceDialog("askForFreeText", {msg: "What would you like to set up an alert on?"});
                 break;
 
             default: 
@@ -314,6 +459,8 @@ bot.dialog("actionPull", [
     }, (session, results) => {
             let func: string = results.response.entity; 
 
+            console.log(func);
+
             let msg: any;
 
             // show table as string
@@ -328,8 +475,6 @@ bot.dialog("actionPull", [
                         return cell.formatted_value || cell.value;
                     }));
                 }
-
-                console.log(table.toString());
 
                 msg = new builder.Message(session)
                     .text("`" + table.toString() + "`"); // .replace(/(?:\r\n|\r|\n)/g, "  \n"")
@@ -357,6 +502,8 @@ bot.dialog("actionPull", [
 
 bot.dialog("actionTag", [
     (session) => {
+        session.userData.tagVal = ipp.getTagValue(session.userData.page.content, session.userData.tagName);
+
         let msg: any = new builder.Message(session)
             .textFormat(builder.TextFormat.xml)
             .attachments([
@@ -378,14 +525,19 @@ bot.dialog("actionAlert", [
     (session) => {
         builder.Prompts.text(session,"When would you like me to notify you? (Use '<50' or '>50' for example)");
     }, (session, results) => {
-        let rule: string = results.response;
+        session.userData.alertRule = results.response;
+        session.replaceDialog("createAlert");        
+    }
+]);
 
-        session.send("OK, I will let you know when " + session.userData.tagName + " is " + rule);
+bot.dialog("createAlert", [
+    (session) => {
+        session.send("OK, I will let you know when " + session.userData.tagName + " is " + session.userData.alertRule);
 
-        alertCollection.watchTag(session.userData.page.domain_id, session.userData.page.id, session.userData.tagName, rule, false, (val) => {
+        alertCollection.watchTag(session.userData.page.domain_id, session.userData.page.id, session.userData.tagName, session.userData.alertRule, false, (val) => {
             let msg = new builder.Message()
                 .address(session.message.address)
-                .text("YO! " + session.userData.tagName + " is " + rule + " ! Current value is " + val);
+                .text("YO! " + session.userData.tagName + " is " + session.userData.alertRule + " ! Current value is " + val);
 
             bot.send(msg);    
         });
@@ -637,4 +789,46 @@ let findAndSetTags = (page: any) => {
 
 let getImageUrl = (page: any) => {
     return `${config.ipushpull.docs_url}/export/image?pageId=${page.id}&config=slack`;
+}
+
+let stringSimilarity = (s1, s2) => {
+    var longer = s1;
+    var shorter = s2;
+    if (s1.length < s2.length) {
+        longer = s2;
+        shorter = s1;
+    }
+    var longerLength = longer.length;
+    if (longerLength == 0) {
+        return 1.0;
+    }
+    return (longerLength - editDistance(longer, shorter)) / parseFloat(longerLength);
+}
+
+let editDistance = (s1, s2) => {
+    
+  s1 = s1.toLowerCase();
+  s2 = s2.toLowerCase();
+
+  var costs = new Array();
+  for (var i = 0; i <= s1.length; i++) {
+    var lastValue = i;
+    for (var j = 0; j <= s2.length; j++) {
+      if (i == 0)
+        costs[j] = j;
+      else {
+        if (j > 0) {
+          var newValue = costs[j - 1];
+          if (s1.charAt(i - 1) != s2.charAt(j - 1))
+            newValue = Math.min(Math.min(newValue, lastValue),
+              costs[j]) + 1;
+          costs[j - 1] = lastValue;
+          lastValue = newValue;
+        }
+      }
+    }
+    if (i > 0)
+      costs[s2.length] = lastValue;
+  }
+  return costs[s2.length];
 }
