@@ -52,11 +52,11 @@ var connector = new builder.ChatConnector({
 });
 
 var bot = new builder.UniversalBot(connector);
-server.post('/api/messages', connector.listen());
 server.use((req, res, next) => {
     console.log(req);
     return next();
 });
+server.post('/api/messages', connector.listen());
 
 //=========================================================
 // Activity Events
