@@ -1,5 +1,6 @@
 {
     "ipushpull": {
+        "ws_url": "https://test.ipushpull.com",
         "endpoint": "https://www.ipushpull.com/api/1.0",
         "web_url": "https://test.ipushpull.com",
         "docs_url": "https://docs.ipushpull.com",
