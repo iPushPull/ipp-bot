@@ -1,5 +1,5 @@
 import config = require("./config");
-import {TagAlertCollection} from "./models/alert_provider/alert_collection"
+import {TagAlertCollection} from "./models/alert_provider/alert_collection";
 import Q = require("q");
 import { IPushPull } from "./ipp_service";
 import Table = require("cli-table2");
@@ -178,7 +178,7 @@ bot.dialog("folderPageSelect", [
         builder.Prompts.text(session, "What folder would you like to work with?");
     },
     (session, results) => {
-        session.userData.folderName = results.response;
+        session.userData.folderName = results.response.replace(/ /ig, "_");
 
         session.sendTyping();
 
