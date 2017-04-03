@@ -294,9 +294,10 @@ export namespace ipushpull {
 
         public getPageByName(data: any): IPromise<IRequestResult>{
             let url: string = `${this._endPoint}/domains/names/${data.domainId}/page_content/name/${data.pageId}/`;
+            console.log(url);
             return this.send(
                 Request
-                    .get(this._endPoint + "/domains/name/" + data.domainId + "/page_content/name/" + data.pageId + "/")
+                    .get(url)
                     .params({client_seq_no: data.seq_no})
             );
         }

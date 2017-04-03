@@ -15,9 +15,9 @@ export class TagAlertCollection {
                 subscriptions: [],
             };
 
-            let provider = new PageProviderREST(pageId, folderId);
+            let provider = new PageProviderWS(pageId, folderId);
 
-            provider.on(PageProviderREST.EVENT_CONTENT_LOADED, (data) => { 
+            provider.on(PageProviderWS.EVENT_CONTENT_LOADED, (data) => { 
                 for(let i: number = 0; i < watcher.subscriptions.length; i++){
                     let tagVal = provider.getTagValue(watcher.subscriptions[i].tag);      
 
