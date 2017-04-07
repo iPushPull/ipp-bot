@@ -52,10 +52,10 @@ var connector = new builder.ChatConnector({
 });
 
 var bot = new builder.UniversalBot(connector);
-server.use((req, res, next) => {
-    console.log(req);
-    return next();
-});
+// server.use((req, res, next) => {
+//     console.log(util.inspect(req, {showHidden: false, depth: 1}));
+//     return next();
+// });
 server.post('/api/messages', connector.listen());
 
 //=========================================================
@@ -450,7 +450,8 @@ bot.dialog("actionPull", [
                 ])
                 .buttons([
                     builder.CardAction.postBack(session, (["emulator", "slack"].indexOf(session.message.address.channelId) != -1) ? "pull_table" : "pull_image", "Get the whole page"),
-                    builder.CardAction.postBack(session, "pull_tag", "Get value of a tag")
+                    // builder.CardAction.postBack(session, "pull_tag", "Get value of a tag")
+                    // builder.CardAction.dialogAction(session, "actionTag", null, "Get value of a tag"),
                 ])
         ];
 
@@ -499,14 +500,17 @@ bot.dialog("actionPull", [
         }
 
         if (func === "pull_tag") {
-            session.replaceDialog("selectTag");
+            session.beginDialog("selectTag");
         }
     }
 ]);
 
+// bot.beginDialogAction("actionTag", "actionTag");
+
 bot.dialog("actionTag", [
     (session) => {
         session.userData.tagVal = ipp.getTagValue(session.userData.page.content, session.userData.tagName);
+        console.log(session.userData);
 
         let msg: any = new builder.Message(session)
             .textFormat(builder.TextFormat.xml)
@@ -514,9 +518,9 @@ bot.dialog("actionTag", [
                 new builder.HeroCard(session)
                     .title(session.userData.tagName)
                     .text(session.userData.tagVal)
-                    .buttons([
-                        builder.CardAction.dialogAction(session, "actionAlert", null, "Create alert"),
-                    ])
+                    // .buttons([
+                    //     builder.CardAction.dialogAction(session, "actionAlert", null, "Create alert"),
+                    // ])
             ]);
 
         session.send(msg);

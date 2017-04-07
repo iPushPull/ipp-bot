@@ -1,9 +1,9 @@
 {
     "ipushpull": {
         "ws_url": "https://test.ipushpull.com",
-        "endpoint": "https://www.ipushpull.com/api/1.0",
         "web_url": "https://test.ipushpull.com",
-        "docs_url": "https://docs.ipushpull.com",
+        "endpoint": "https://test.ipushpull.com/api/1.0",
+        "docs_url": "https://docstest.ipushpull.com/docs",
         "api_key": "xxx",
         "api_secret": "xxx",
         "username": "email@domain.com",
